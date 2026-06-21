@@ -1,0 +1,10 @@
+[Unit]
+Description=Clean old PDF Exercise Maker jobs
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pdf-exercise-web
+EnvironmentFile=/opt/pdf-exercise-web/.env
+ExecStart=/opt/pdf-exercise-web/.venv/bin/python scripts/cleanup_old_jobs.py

@@ -1,0 +1,16 @@
+[Unit]
+Description=PDF Exercise Maker Worker
+After=network.target pdf-exercise-api.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pdf-exercise-web
+EnvironmentFile=/opt/pdf-exercise-web/.env
+ExecStart=/opt/pdf-exercise-web/.venv/bin/python -m worker.worker
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

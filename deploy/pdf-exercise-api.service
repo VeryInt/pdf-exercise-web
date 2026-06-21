@@ -1,0 +1,16 @@
+[Unit]
+Description=PDF Exercise Maker API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pdf-exercise-web
+EnvironmentFile=/opt/pdf-exercise-web/.env
+ExecStart=/opt/pdf-exercise-web/.venv/bin/uvicorn app.main:app --host ${APP_HOST} --port ${APP_PORT}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

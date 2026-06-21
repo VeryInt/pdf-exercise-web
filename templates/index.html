@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Exercise Maker</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>PDF Exercise Maker</h1>
+        <p class="hint">上传试卷图片或 PDF，生成无答案习题 PDF 和答案详解 PDF。</p>
+      </header>
+
+      <form id="job-form">
+        <div class="grid">
+          <label class="wide">
+            文件
+            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.webp" required />
+          </label>
+
+          <label>
+            学科
+            <select name="subject">
+              <option value="auto">自动判断</option>
+              <option value="english">英语</option>
+              <option value="math">数学</option>
+              <option value="physics">物理</option>
+              <option value="other">其他</option>
+            </select>
+          </label>
+
+          <label>
+            图形策略
+            <select name="diagram_strategy">
+              <option value="source_crop_first">复杂图形优先原图带留白裁切</option>
+              <option value="tikz_when_safe">简单规则图形才重绘</option>
+              <option value="tikz_first">尽量 LaTeX/TikZ 重绘</option>
+            </select>
+          </label>
+
+          <label>
+            AI Provider
+            <select name="provider">
+              <option value="openai">OpenAI / OpenAI-compatible</option>
+            </select>
+          </label>
+
+          <label>
+            Base URL
+            <input name="base_url" value="https://api.openai.com/v1" required />
+          </label>
+
+          <label>
+            Model
+            <input name="model" value="gpt-5.5" required />
+          </label>
+
+          <label>
+            API Key
+            <input name="api_key" type="password" autocomplete="off" required />
+          </label>
+
+          <label class="checkbox wide">
+            <input id="save-config" type="checkbox" />
+            保存 AI 配置到本浏览器 LocalStorage
+          </label>
+        </div>
+
+        <p class="hint">API Key 只随任务提交使用，服务端不写入 SQLite；任务完成后会删除临时密钥文件。</p>
+        <p class="hint">MVP 限制：单文件 10MB；全站最多 2 个排队/运行任务；同一 IP 同时只能 1 个任务，每小时最多 5 个。</p>
+        <button type="submit">开始生成</button>
+      </form>
+
+      <section id="status" class="panel">
+        <p class="hint">等待提交任务。</p>
+      </section>
+
+      <section id="results" class="panel"></section>
+
+      <section class="panel">
+        <h2>最近任务</h2>
+        <div id="recent-jobs"></div>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
