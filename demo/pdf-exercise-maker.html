@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PDF Exercise Maker — 试卷整理生成器</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0E1014;
+    --ink-2:#1A1D24;
+    --paper:#F6F4EE;
+    --paper-2:#EFEBE1;
+    --line:#1A1D24;
+    --accent:#1F3CFF;
+    --accent-soft:#E6E9FF;
+    --ok:#1E7A4D;
+    --warn:#B0561A;
+    --err:#B0241A;
+  }
+  html,body{background:var(--paper);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui;-webkit-font-smoothing:antialiased;}
+  .font-serif{font-family:'Instrument Serif',Georgia,serif;font-weight:400;letter-spacing:-0.01em;}
+  .font-mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .hairline{border-color:var(--line);}
+  .ink{color:var(--ink);} .bg-ink{background:var(--ink);color:var(--paper);}
+  .bg-paper{background:var(--paper);} .bg-paper-2{background:var(--paper-2);}
+  .accent{color:var(--accent);} .bg-accent{background:var(--accent);}
+  .bg-accent-soft{background:var(--accent-soft);}
+  .grid-bg{
+    background-image:
+      linear-gradient(to right, rgba(26,29,36,.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(26,29,36,.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .ticker{
+    background-image: repeating-linear-gradient(135deg, rgba(26,29,36,.08) 0 6px, transparent 6px 12px);
+  }
+  .btn-ink{background:var(--ink);color:var(--paper);transition:transform .15s ease, background .2s;}
+  .btn-ink:hover{background:#000;transform:translateY(-1px);}
+  .chip{display:inline-flex;align-items:center;gap:.4rem;border:1px solid var(--line);padding:.15rem .55rem;border-radius:999px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;}
+  .field{display:flex;flex-direction:column;gap:.45rem;}
+  .field label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#3a3f49;font-weight:600;}
+  .field .help{font-size:12px;color:#5b6270;}
+  .input, .select{
+    width:100%;background:transparent;border:none;border-bottom:1.5px solid var(--line);
+    padding:.55rem 0;font-size:15px;outline:none;color:var(--ink);
+  }
+  .input:focus, .select:focus{border-bottom-color:var(--accent);}
+  .select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%230E1014' stroke-width='1.5' fill='none'/></svg>");background-repeat:no-repeat;background-position:right .25rem center;padding-right:1.5rem;}
+  .dot{width:6px;height:6px;border-radius:999px;display:inline-block;}
+  .timeline-rail{position:absolute;left:6.25px;top:6px;bottom:6px;width:1.5px;background:var(--line);opacity:.25;}
+  details > summary { list-style: none; cursor:pointer;}
+  details > summary::-webkit-details-marker{display:none;}
+  .num{font-feature-settings:"tnum" 1, "ss01" 1;}
+  .underline-link{background-image:linear-gradient(var(--ink),var(--ink));background-size:100% 1px;background-repeat:no-repeat;background-position:0 100%;}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- TOP BAR -->
+<header class="border-b hairline">
+  <div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 h-14 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div class="w-7 h-7 bg-ink flex items-center justify-center shrink-0">
+        <span class="font-serif italic text-[15px] leading-none text-[color:var(--paper)]">P</span>
+      </div>
+      <span class="text-[12px] sm:text-[13px] tracking-[0.14em] uppercase font-semibold truncate">PDF Exercise Maker</span>
+      <span class="chip ml-1 font-mono hidden sm:inline-flex shrink-0"><span class="dot bg-[color:var(--ok)]"></span>v0.4 · MVP</span>
+    </div>
+    <nav class="hidden lg:flex items-center gap-6 text-[13px]">
+      <a class="hover:accent" href="#">工作原理</a>
+      <a class="hover:accent" href="#">隐私说明</a>
+      <a class="hover:accent" href="#">配额 & 限制</a>
+      <a class="hover:accent flex items-center gap-1.5" href="#">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.5 15.6c.4.1.5-.2.5-.4v-1.4c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.9.9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-3.9 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.6 7.6 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.5 1.1.2 1.9.1 2.1.5.5.8 1.2.8 2.1 0 3-1.8 3.7-3.6 3.9.3.3.6.8.6 1.5v2.2c0 .2.1.5.5.4A8 8 0 0 0 8 0z"/></svg>
+        GitHub
+      </a>
+      <button class="btn-ink text-[12px] px-3 py-1.5 tracking-wider uppercase">帮助</button>
+    </nav>
+    <button class="lg:hidden btn-ink text-[11px] px-3 py-1.5 tracking-wider uppercase shrink-0">菜单</button>
+  </div>
+</header>
+
+<!-- MARQUEE STATUS -->
+<div class="border-b hairline bg-paper-2 overflow-hidden">
+  <div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 h-9 flex items-center justify-between gap-4 text-[11px] sm:text-[12px] font-mono">
+    <div class="flex items-center gap-3 sm:gap-4 min-w-0 overflow-hidden whitespace-nowrap">
+      <span class="flex items-center gap-1.5 shrink-0"><span class="dot bg-[color:var(--ok)]"></span>系统运行中</span>
+      <span class="opacity-60 hidden sm:inline">|</span>
+      <span class="shrink-0">活跃 <b class="num">1/2</b></span>
+      <span class="opacity-60 hidden sm:inline">|</span>
+      <span class="hidden sm:inline shrink-0">本 IP 已用 <b class="num">2 / 5</b></span>
+    </div>
+    <div class="hidden md:flex items-center gap-3 lg:gap-4 opacity-70 shrink-0 whitespace-nowrap">
+      <span>≤ 10MB</span><span>·</span>
+      <span>队列上限 2</span><span>·</span>
+      <span>同 IP 1 任务</span>
+    </div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="border-b hairline grid-bg">
+  <div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 py-10 lg:py-14 grid lg:grid-cols-12 gap-8 lg:gap-10 items-end">
+    <div class="lg:col-span-8">
+      <div class="chip mb-5 font-mono">№ 01 — 试卷整理生成器</div>
+      <h1 class="font-serif text-[34px] sm:text-[44px] lg:text-[60px] leading-[1] tracking-[-0.02em]">
+        上传一张试卷，<br/>
+        拿回 <em class="italic">两份</em> 干净的 PDF。
+      </h1>
+      <p class="mt-5 max-w-xl text-[14px] sm:text-[15px] leading-relaxed text-[color:#3a3f49]">
+        识别题目、保留图形、分离答案与讲解。API Key 在浏览器里配置，服务端不留底。
+      </p>
+    </div>
+    <div class="lg:col-span-4">
+      <div class="border hairline bg-paper-2 p-4 sm:p-5">
+        <div class="flex items-center justify-between text-[11px] tracking-[0.14em] uppercase font-semibold">
+          <span>本次会话</span><span class="font-mono opacity-60">live</span>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div class="border hairline py-3 bg-paper">
+            <div class="font-serif text-2xl sm:text-3xl num">12</div>
+            <div class="text-[10px] uppercase tracking-wider opacity-60 mt-1">已生成</div>
+          </div>
+          <div class="border hairline py-3 bg-paper">
+            <div class="font-serif text-2xl sm:text-3xl num accent">1</div>
+            <div class="text-[10px] uppercase tracking-wider opacity-60 mt-1">运行中</div>
+          </div>
+          <div class="border hairline py-3 bg-paper">
+            <div class="font-serif text-2xl sm:text-3xl num">3</div>
+            <div class="text-[10px] uppercase tracking-wider opacity-60 mt-1">最近</div>
+          </div>
+        </div>
+        <div class="mt-3 text-[11px] sm:text-[12px] font-mono opacity-70 ticker py-2 px-2 border hairline">
+          下次清理 · 23:42:11
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN: FORM + STATUS -->
+<main class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 py-10 lg:py-16 grid lg:grid-cols-12 gap-10">
+
+  <!-- LEFT: FORM -->
+  <section class="lg:col-span-7 space-y-10">
+
+    <!-- SECTION: UPLOAD -->
+    <div>
+      <div class="flex items-baseline justify-between mb-4">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] tracking-[0.2em] opacity-50">§ 01</span>
+          <h2 class="font-serif text-3xl">上传试卷</h2>
+        </div>
+        <span class="text-[12px] opacity-60">PDF · PNG · JPG · WEBP · ≤10MB</span>
+      </div>
+
+      <!-- dropzone -->
+      <label class="block border-[1.5px] border-dashed hairline bg-paper-2 hover:bg-[#ece8dc] transition cursor-pointer">
+        <div class="p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+          <div class="w-14 h-18 sm:w-16 sm:h-20 bg-paper border hairline relative shrink-0">
+            <div class="absolute inset-2 border-t border-b hairline opacity-40"></div>
+            <div class="absolute inset-x-2 top-1/2 border-t hairline opacity-40"></div>
+            <div class="absolute -top-2 -right-2 chip bg-paper font-mono text-[10px]">PDF</div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-serif text-xl sm:text-2xl leading-tight">把试卷拖到这里</div>
+            <div class="text-[13px] opacity-70 mt-1">或者 <span class="underline-link">点击选择文件</span> · 自动识别学科</div>
+          </div>
+          <button class="btn-ink px-4 py-2 text-[12px] tracking-wider uppercase shrink-0">浏览文件</button>
+        </div>
+
+        <!-- selected file preview -->
+        <div class="border-t hairline px-5 sm:px-8 py-3 sm:py-4 flex items-center justify-between gap-3 bg-paper">
+          <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span class="dot bg-[color:var(--accent)] shrink-0"></span>
+            <span class="font-mono text-[12px] sm:text-[13px] truncate">math_midterm_2024.pdf</span>
+            <span class="text-[11px] sm:text-[12px] opacity-60 num shrink-0 hidden sm:inline">· 2.4 MB · 6 页</span>
+          </div>
+          <button class="text-[12px] underline-link opacity-70 hover:opacity-100 shrink-0">移除</button>
+        </div>
+      </label>
+    </div>
+
+    <!-- SECTION: PAPER SETTINGS -->
+    <div>
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="font-mono text-[11px] tracking-[0.2em] opacity-50">§ 02</span>
+        <h2 class="font-serif text-3xl">试卷设置</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-x-10 gap-y-6">
+        <div class="field">
+          <label>学科</label>
+          <select class="select">
+            <option>自动判断</option><option>数学</option><option>物理</option><option>英语</option><option>其他</option>
+          </select>
+          <div class="help">告诉模型如何理解题型与符号。</div>
+        </div>
+        <div class="field">
+          <label>图形策略 <span class="accent">★</span></label>
+          <select class="select">
+            <option>复杂图形优先原图带留白裁切</option>
+            <option>简单规则图形才重绘</option>
+            <option>尽量 LaTeX / TikZ 重绘</option>
+          </select>
+          <div class="help">这一项最影响数学/物理试卷的还原度。</div>
+        </div>
+      </div>
+
+      <!-- strategy explainer -->
+      <details class="mt-6 border hairline bg-paper-2">
+        <summary class="px-4 py-3 flex items-center justify-between text-[13px]">
+          <span class="font-semibold">三种图形策略到底有什么差别？</span>
+          <span class="font-mono opacity-50">▾</span>
+        </summary>
+        <div class="px-4 pb-4 grid md:grid-cols-3 gap-4 text-[12.5px] leading-relaxed">
+          <div class="border-t hairline pt-3"><b>原图裁切</b><br/><span class="opacity-70">几何图、函数图、电路图保真度最高，PDF 体积较大。</span></div>
+          <div class="border-t hairline pt-3"><b>混合重绘</b><br/><span class="opacity-70">规则图形重绘为矢量，复杂图形保留原图。推荐。</span></div>
+          <div class="border-t hairline pt-3"><b>全量重绘</b><br/><span class="opacity-70">体积最小、最干净，但复杂图形可能失真。</span></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- SECTION: AI SETTINGS -->
+    <div>
+      <div class="flex items-baseline justify-between mb-5">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] tracking-[0.2em] opacity-50">§ 03</span>
+          <h2 class="font-serif text-3xl">AI 配置</h2>
+        </div>
+        <button class="text-[12px] underline-link opacity-70 hover:opacity-100">测试连接 →</button>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-x-10 gap-y-6">
+        <div class="field">
+          <label>Provider</label>
+          <select class="select"><option>OpenAI / OpenAI-compatible</option></select>
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <input class="input font-mono" value="gpt-5.5"/>
+        </div>
+        <div class="field md:col-span-2">
+          <label>Base URL</label>
+          <input class="input font-mono" value="https://api.openai.com/v1"/>
+        </div>
+        <div class="field md:col-span-2">
+          <label>API Key</label>
+          <div class="flex items-center gap-3 border-b hairline" style="border-bottom-width:1.5px;">
+            <input type="password" class="input border-b-0 flex-1" value="sk-•••••••••••••••••••••••••••••••••"/>
+            <button class="text-[11px] tracking-wider uppercase opacity-70 hover:opacity-100">显示</button>
+          </div>
+          <div class="help flex items-center gap-2">
+            <span class="dot bg-[color:var(--ok)]"></span>
+            只随本次任务发送给服务端，任务完成后立即删除临时密钥文件。
+          </div>
+        </div>
+      </div>
+
+      <!-- privacy -->
+      <label class="mt-6 flex items-start gap-3 border hairline p-4 bg-paper-2 cursor-pointer">
+        <input type="checkbox" checked class="mt-1 w-4 h-4 accent-[color:var(--accent)]"/>
+        <div class="flex-1">
+          <div class="text-[13px] font-semibold">保存 AI 配置到本浏览器（LocalStorage）</div>
+          <div class="text-[12px] opacity-70 mt-1">仅保存在你这台设备的浏览器里：Provider、Base URL、Model、API Key。取消勾选会立即清除。</div>
+        </div>
+        <span class="chip font-mono">本机</span>
+      </label>
+    </div>
+
+    <!-- SUBMIT -->
+    <div class="border-t hairline pt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6">
+      <div class="text-[12px] opacity-70 max-w-sm leading-relaxed">
+        提交即表示你同意临时使用你的 API Key 调用所选模型。生成的 PDF 将在 24 小时后自动清理。
+      </div>
+      <button class="btn-ink w-full sm:w-auto justify-center px-6 sm:px-8 py-3.5 sm:py-4 text-[13px] tracking-[0.16em] uppercase flex items-center gap-3">
+        生成习题 & 答案
+        <span class="font-mono">↵</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- RIGHT: LIVE PANEL -->
+  <aside class="lg:col-span-5">
+    <div class="sticky top-6 space-y-6">
+
+      <!-- JOB STATUS -->
+      <div class="border hairline bg-paper">
+        <div class="flex items-center justify-between px-5 py-3 border-b hairline bg-ink">
+          <div class="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-[color:var(--paper)]">
+            <span class="dot bg-[color:#9bff7a] animate-pulse"></span>
+            正在运行
+          </div>
+          <span class="font-mono text-[11px] text-[color:var(--paper)] opacity-70">job · a1b2c3d4</span>
+        </div>
+
+        <div class="p-5">
+          <div class="flex items-baseline justify-between">
+            <div class="font-serif text-2xl">识别中…</div>
+            <div class="font-mono num text-2xl">62<span class="text-sm opacity-60">%</span></div>
+          </div>
+          <!-- progress -->
+          <div class="mt-3 h-[6px] bg-paper-2 border hairline relative overflow-hidden">
+            <div class="absolute inset-y-0 left-0 bg-accent" style="width:62%"></div>
+          </div>
+          <div class="mt-2 flex items-center justify-between text-[12px] opacity-70 font-mono">
+            <span>排队 #1 · 正在处理</span>
+            <span>已耗时 00:42</span>
+          </div>
+
+          <!-- timeline -->
+          <div class="mt-6 relative pl-7">
+            <div class="timeline-rail"></div>
+            <ol class="space-y-3 text-[13px]">
+              <li class="relative">
+                <span class="absolute -left-7 top-1.5 w-[14px] h-[14px] rounded-full bg-ink border hairline"></span>
+                <div class="flex justify-between"><b>已上传</b><span class="font-mono opacity-50">00:00</span></div>
+              </li>
+              <li class="relative">
+                <span class="absolute -left-7 top-1.5 w-[14px] h-[14px] rounded-full bg-ink border hairline"></span>
+                <div class="flex justify-between"><b>图片预处理</b><span class="font-mono opacity-50">00:08</span></div>
+              </li>
+              <li class="relative">
+                <span class="absolute -left-7 top-1 w-[14px] h-[14px] rounded-full bg-accent border hairline ring-4 ring-[color:var(--accent-soft)]"></span>
+                <div class="flex justify-between"><b class="accent">AI 识别题目</b><span class="font-mono opacity-50">进行中</span></div>
+                <div class="text-[12px] opacity-70 mt-0.5">已识别 14 / ~22 题</div>
+              </li>
+              <li class="relative opacity-40">
+                <span class="absolute -left-7 top-1.5 w-[14px] h-[14px] rounded-full border hairline bg-paper"></span>
+                <div class="flex justify-between"><b>生成无答案习题 PDF</b></div>
+              </li>
+              <li class="relative opacity-40">
+                <span class="absolute -left-7 top-1.5 w-[14px] h-[14px] rounded-full border hairline bg-paper"></span>
+                <div class="flex justify-between"><b>生成答案详解 PDF</b></div>
+              </li>
+              <li class="relative opacity-40">
+                <span class="absolute -left-7 top-1.5 w-[14px] h-[14px] rounded-full border hairline bg-paper"></span>
+                <div class="flex justify-between"><b>完成</b></div>
+              </li>
+            </ol>
+          </div>
+
+          <!-- tokens -->
+          <div class="mt-6 grid grid-cols-3 border hairline">
+            <div class="p-3 border-r hairline">
+              <div class="text-[10px] uppercase tracking-wider opacity-60">输入</div>
+              <div class="font-mono num text-lg mt-1">12,480</div>
+            </div>
+            <div class="p-3 border-r hairline">
+              <div class="text-[10px] uppercase tracking-wider opacity-60">输出</div>
+              <div class="font-mono num text-lg mt-1">3,210</div>
+            </div>
+            <div class="p-3">
+              <div class="text-[10px] uppercase tracking-wider opacity-60">合计 ≈ ¥</div>
+              <div class="font-mono num text-lg mt-1">0.18</div>
+            </div>
+          </div>
+
+          <!-- actions -->
+          <div class="mt-5 flex items-center justify-between">
+            <button class="text-[12px] underline-link opacity-70 hover:opacity-100">取消任务</button>
+            <span class="text-[11px] font-mono opacity-50">每 2.5s 自动刷新</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULT (preview state, faded) -->
+      <div class="border hairline">
+        <div class="px-5 py-3 border-b hairline flex items-center justify-between">
+          <div class="flex items-baseline gap-3">
+            <span class="font-mono text-[11px] tracking-[0.2em] opacity-50">§ 04</span>
+            <h3 class="font-serif text-xl">下载结果</h3>
+          </div>
+          <span class="chip font-mono">待完成</span>
+        </div>
+        <ul class="divide-y hairline">
+          <li class="flex items-center justify-between px-5 py-3.5">
+            <div>
+              <div class="text-[14px] font-semibold">无答案习题 PDF</div>
+              <div class="text-[12px] opacity-60">给孩子练习用 · 仅题面</div>
+            </div>
+            <button class="btn-ink text-[11px] tracking-wider uppercase px-3 py-1.5 opacity-30 pointer-events-none">下载</button>
+          </li>
+          <li class="flex items-center justify-between px-5 py-3.5">
+            <div>
+              <div class="text-[14px] font-semibold">答案详解 PDF</div>
+              <div class="text-[12px] opacity-60">题目 + 答案 + 解析</div>
+            </div>
+            <button class="btn-ink text-[11px] tracking-wider uppercase px-3 py-1.5 opacity-30 pointer-events-none">下载</button>
+          </li>
+          <li class="flex items-center justify-between px-5 py-3 text-[13px]">
+            <span>结构化数据 <span class="opacity-50">·json</span></span>
+            <a class="underline-link opacity-50">下载</a>
+          </li>
+          <li class="flex items-center justify-between px-5 py-3 text-[13px]">
+            <span>转录底稿 <span class="opacity-50">·md</span></span>
+            <a class="underline-link opacity-50">下载</a>
+          </li>
+          <li class="flex items-center justify-between px-5 py-3 text-[13px]">
+            <span>Token 用量 <span class="opacity-50">·json</span></span>
+            <a class="underline-link opacity-50">下载</a>
+          </li>
+        </ul>
+        <div class="px-5 py-3 border-t hairline bg-paper-2 text-[11px] font-mono opacity-70 flex justify-between">
+          <span>过期清理倒计时</span><span>23 : 59 : 42</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- RECENT JOBS -->
+<section class="border-t hairline bg-paper-2">
+  <div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 py-12 lg:py-14">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6 sm:mb-8">
+      <div>
+        <div class="font-mono text-[11px] tracking-[0.2em] opacity-50">§ 05</div>
+        <h2 class="font-serif text-3xl sm:text-4xl mt-1">最近任务</h2>
+        <p class="text-[13px] opacity-70 mt-2">保存在你的浏览器，刷新页面也能找回。最多 8 条。</p>
+      </div>
+      <button class="text-[12px] underline-link opacity-70 hover:opacity-100 self-start sm:self-auto">清空全部</button>
+    </div>
+
+    <div class="border hairline bg-paper overflow-x-auto">
+     <div class="min-w-[640px]">
+      <div class="grid grid-cols-12 px-5 py-3 border-b hairline text-[10px] uppercase tracking-[0.18em] font-semibold opacity-60">
+        <div class="col-span-1">#</div>
+        <div class="col-span-4">文件 / Job</div>
+        <div class="col-span-2">学科</div>
+        <div class="col-span-2">状态</div>
+        <div class="col-span-2">创建时间</div>
+        <div class="col-span-1 text-right">操作</div>
+      </div>
+
+      <!-- row -->
+      <div class="grid grid-cols-12 px-5 py-4 border-b hairline items-center hover:bg-paper-2">
+        <div class="col-span-1 font-mono num opacity-50">01</div>
+        <div class="col-span-4">
+          <div class="text-[14px]">math_midterm_2024.pdf</div>
+          <div class="font-mono text-[11px] opacity-50">a1b2c3d4</div>
+        </div>
+        <div class="col-span-2 text-[13px]">数学</div>
+        <div class="col-span-2 flex items-center gap-2 text-[13px]"><span class="dot bg-[color:var(--accent)] animate-pulse"></span>运行中 · 62%</div>
+        <div class="col-span-2 font-mono text-[12px] opacity-70">14:02</div>
+        <div class="col-span-1 text-right"><a class="underline-link text-[12px]">查看</a></div>
+      </div>
+
+      <div class="grid grid-cols-12 px-5 py-4 border-b hairline items-center hover:bg-paper-2">
+        <div class="col-span-1 font-mono num opacity-50">02</div>
+        <div class="col-span-4">
+          <div class="text-[14px]">physics_unit3.jpg</div>
+          <div class="font-mono text-[11px] opacity-50">9f8e7d6c</div>
+        </div>
+        <div class="col-span-2 text-[13px]">物理</div>
+        <div class="col-span-2 flex items-center gap-2 text-[13px]"><span class="dot bg-[color:var(--ok)]"></span>已完成</div>
+        <div class="col-span-2 font-mono text-[12px] opacity-70">昨天 · 21:48</div>
+        <div class="col-span-1 text-right"><a class="underline-link text-[12px]">查看</a></div>
+      </div>
+
+      <div class="grid grid-cols-12 px-5 py-4 border-b hairline items-center hover:bg-paper-2">
+        <div class="col-span-1 font-mono num opacity-50">03</div>
+        <div class="col-span-4">
+          <div class="text-[14px]">english_reading.png</div>
+          <div class="font-mono text-[11px] opacity-50">3b2a1c0d</div>
+        </div>
+        <div class="col-span-2 text-[13px]">英语</div>
+        <div class="col-span-2 flex items-center gap-2 text-[13px]"><span class="dot bg-[color:var(--err)]"></span>失败 · 超时</div>
+        <div class="col-span-2 font-mono text-[12px] opacity-70">昨天 · 09:12</div>
+        <div class="col-span-1 text-right"><a class="underline-link text-[12px]">重试</a></div>
+      </div>
+
+      <div class="grid grid-cols-12 px-5 py-4 items-center hover:bg-paper-2">
+        <div class="col-span-1 font-mono num opacity-50">04</div>
+        <div class="col-span-4">
+          <div class="text-[14px]">math_homework_w8.pdf</div>
+          <div class="font-mono text-[11px] opacity-50">7a6b5c4d</div>
+        </div>
+        <div class="col-span-2 text-[13px]">数学</div>
+        <div class="col-span-2 flex items-center gap-2 text-[13px]"><span class="dot bg-[color:var(--ok)]"></span>已完成</div>
+        <div class="col-span-2 font-mono text-[12px] opacity-70">2 天前</div>
+        <div class="col-span-1 text-right"><a class="underline-link text-[12px]">查看</a></div>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRIVACY / HOW -->
+<section class="border-t hairline">
+  <div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 py-12 lg:py-16 grid lg:grid-cols-12 gap-8 lg:gap-10">
+    <div class="lg:col-span-5">
+      <div class="font-mono text-[11px] tracking-[0.2em] opacity-50">§ 06</div>
+      <h2 class="font-serif text-3xl sm:text-4xl lg:text-5xl leading-[0.95] mt-2">
+        我们 <em class="italic">不</em> 留你的<br/>API Key。
+      </h2>
+      <p class="text-[14px] opacity-75 mt-5 leading-relaxed max-w-md">
+        密钥只在内存里活到任务结束，任务完成立刻删除临时文件，从不写入数据库。生成的 PDF 24 小时后自动清理。
+      </p>
+    </div>
+    <div class="lg:col-span-7 grid md:grid-cols-2 gap-px bg-[color:var(--line)] border hairline">
+      <div class="bg-paper p-6">
+        <div class="font-mono text-[11px] tracking-wider opacity-50">01</div>
+        <div class="font-serif text-2xl mt-1">浏览器侧</div>
+        <p class="text-[13px] opacity-75 mt-2 leading-relaxed">所有 AI 配置默认只保存到你的 LocalStorage，可一键清除。</p>
+      </div>
+      <div class="bg-paper p-6">
+        <div class="font-mono text-[11px] tracking-wider opacity-50">02</div>
+        <div class="font-serif text-2xl mt-1">服务端</div>
+        <p class="text-[13px] opacity-75 mt-2 leading-relaxed">SQLite 只保存任务元数据：状态、进度、Token 用量。不存密钥、不存原文。</p>
+      </div>
+      <div class="bg-paper p-6">
+        <div class="font-mono text-[11px] tracking-wider opacity-50">03</div>
+        <div class="font-serif text-2xl mt-1">配额</div>
+        <p class="text-[13px] opacity-75 mt-2 leading-relaxed">同 IP 同时 1 个任务、每小时最多 5 个、全站排队 2 个。防滥用，也防你的钱包失控。</p>
+      </div>
+      <div class="bg-paper p-6">
+        <div class="font-mono text-[11px] tracking-wider opacity-50">04</div>
+        <div class="font-serif text-2xl mt-1">开源</div>
+        <p class="text-[13px] opacity-75 mt-2 leading-relaxed">前后端完全开源，自己跑一份也行。链接见页脚。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="border-t hairline bg-ink">
+  <div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 py-8 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-6 text-[color:var(--paper)]">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-7 h-7 bg-paper flex items-center justify-center shrink-0">
+        <span class="font-serif italic text-[15px] leading-none ink">P</span>
+      </div>
+      <div class="font-serif text-lg sm:text-xl truncate">PDF Exercise Maker</div>
+      <span class="chip border-[color:var(--paper)] text-[color:var(--paper)] font-mono shrink-0">MVP</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] opacity-80">
+      <a class="hover:opacity-100">GitHub</a>
+      <a class="hover:opacity-100">隐私</a>
+      <a class="hover:opacity-100">API 文档</a>
+      <a class="hover:opacity-100">联系</a>
+      <span class="font-mono opacity-50">© 2025</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
