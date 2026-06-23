@@ -7,6 +7,10 @@
 
 项目适合部署在低配 VPS 上，默认使用 FastAPI、SQLite、本地文件目录、单 worker 和 Nginx，不依赖 Docker、Redis 或 PostgreSQL。
 
+## 页面预览
+
+![PDF Exercise Maker 页面截图](demo/pdfmakerweb.png)
+
 ## 功能
 
 - 支持上传 JPG、PNG、PDF 等试卷文件。
@@ -16,7 +20,7 @@
 - 使用 SQLite 记录任务状态，上传文件和生成结果存放在本地 `data/`。
 - 单 worker 顺序处理任务，适合 1GB 小主机。
 - MVP 限制：单文件 10MB、全局 queued/running 最多 2 个、同 IP 同时最多 1 个任务、同 IP 每小时最多 5 个任务。
-- 任务超过 24 小时会被清理。
+- 服务端任务超过 24 小时会被清理，包括上传文件、任务目录、产物文件和 SQLite 任务记录。
 - 浏览器 LocalStorage 可保存最近 job_id 和用户自己的 AI 配置。
 
 ## 安全说明
@@ -31,6 +35,8 @@
 本项目的 `.gitignore` 已默认忽略这些运行时文件。公开仓库只应保存代码、模板和示例配置。
 
 网页中的 AI Provider、Base URL、Model、API Key 默认由用户在浏览器填写。API Key 提交任务时会临时传给服务端，服务端写入任务目录里的临时 `secrets.json`，worker 读取后立即删除，不写入 SQLite。
+
+最近任务列表保存在用户自己的浏览器 LocalStorage 中，只保存任务引用和展示用元数据。服务端 24 小时清理不会主动删除用户浏览器里的 LocalStorage；如果任务已过期，用户再次查看时会得到任务不存在或文件已清理的提示。
 
 ## 本地运行
 
