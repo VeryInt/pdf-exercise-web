@@ -3,87 +3,316 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF Exercise Maker</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <title>PDF Exercise Maker - 试卷整理生成器</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230e1014'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia,serif' font-size='36' font-style='italic' fill='%23f6f4ee'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/static/style.css?v=20260623-1" />
   </head>
   <body>
-    <main>
-      <header>
-        <h1>PDF Exercise Maker</h1>
-        <p class="hint">上传试卷图片或 PDF，生成无答案习题 PDF 和答案详解 PDF。</p>
-      </header>
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="/" aria-label="PDF Exercise Maker">
+          <span class="brand-mark">P</span>
+          <span>PDF Exercise Maker</span>
+          <span class="chip hide-sm"><span class="dot ok"></span>v0.4 · MVP</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="#how">工作原理</a>
+          <a href="#privacy">隐私说明</a>
+          <a href="#limits">配额 & 限制</a>
+          <a href="https://github.com/VeryInt/pdf-exercise-web" target="_blank" rel="noreferrer">GitHub</a>
+          <a class="btn small" href="#help">帮助</a>
+        </nav>
+      </div>
+    </header>
 
-      <form id="job-form">
-        <div class="grid">
-          <label class="wide">
-            文件
-            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.webp" required />
-          </label>
-
-          <label>
-            学科
-            <select name="subject">
-              <option value="auto">自动判断</option>
-              <option value="english">英语</option>
-              <option value="math">数学</option>
-              <option value="physics">物理</option>
-              <option value="other">其他</option>
-            </select>
-          </label>
-
-          <label>
-            图形策略
-            <select name="diagram_strategy">
-              <option value="source_crop_first">复杂图形优先原图带留白裁切</option>
-              <option value="tikz_when_safe">简单规则图形才重绘</option>
-              <option value="tikz_first">尽量 LaTeX/TikZ 重绘</option>
-            </select>
-          </label>
-
-          <label>
-            AI Provider
-            <select name="provider">
-              <option value="openai">OpenAI / OpenAI-compatible</option>
-            </select>
-          </label>
-
-          <label>
-            Base URL
-            <input name="base_url" value="https://api.openai.com/v1" required />
-          </label>
-
-          <label>
-            Model
-            <input name="model" value="gpt-5.5" required />
-          </label>
-
-          <label>
-            API Key
-            <input name="api_key" type="password" autocomplete="off" required />
-          </label>
-
-          <label class="checkbox wide">
-            <input id="save-config" type="checkbox" />
-            保存 AI 配置到本浏览器 LocalStorage
-          </label>
+    <section class="status-strip">
+      <div class="shell status-strip-inner">
+        <div class="status-inline">
+          <span><span class="dot ok"></span>系统运行中</span>
+          <span class="sep">|</span>
+          <span>活跃 <b id="active-jobs" class="num">0/2</b></span>
+          <span class="sep">|</span>
+          <span class="hide-sm">本 IP 已用 <b id="ip-quota" class="num">0/5</b></span>
         </div>
+        <div class="status-inline muted hide-md">
+          <span>≤ <span id="max-upload">10</span>MB</span>
+          <span>·</span>
+          <span>队列上限 <span id="queue-limit">2</span></span>
+          <span>·</span>
+          <span>同 IP <span id="ip-active-limit">1</span> 任务</span>
+        </div>
+      </div>
+    </section>
 
-        <p class="hint">API Key 只随任务提交使用，服务端不写入 SQLite；任务完成后会删除临时密钥文件。</p>
-        <p class="hint">MVP 限制：单文件 10MB；全站最多 2 个排队/运行任务；同一 IP 同时只能 1 个任务，每小时最多 5 个。</p>
-        <button type="submit">开始生成</button>
+    <section class="hero grid-bg">
+      <div class="shell hero-grid">
+        <div class="hero-copy">
+          <span class="chip mono">No. 01 - 试卷整理生成器</span>
+          <h1>上传一张试卷，<br />拿回 <em>两份</em> 干净的 PDF。</h1>
+          <p>识别题目、保留图形、分离答案与讲解。API Key 在浏览器里配置，服务端不留底。</p>
+        </div>
+        <aside class="session-card" aria-label="本次会话统计">
+          <div class="section-kicker">
+            <span>本次会话</span>
+            <span class="mono muted">live</span>
+          </div>
+          <div class="session-stats">
+            <div>
+              <strong id="session-created" class="serif num">0</strong>
+              <span>已提交</span>
+            </div>
+            <div>
+              <strong id="session-running" class="serif num accent">0</strong>
+              <span>运行中</span>
+            </div>
+            <div>
+              <strong id="session-recent" class="serif num">0</strong>
+              <span>最近</span>
+            </div>
+          </div>
+          <div class="ticker mono">结果默认 24 小时后自动清理</div>
+        </aside>
+      </div>
+    </section>
+
+    <main class="shell app-grid">
+      <form id="job-form" class="work-form">
+        <input type="hidden" name="client_id" id="client-id-field" />
+
+        <section class="form-section" id="upload">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">§ 01</span>
+              <h2>上传试卷</h2>
+            </div>
+            <span class="section-note">PDF · PNG · JPG · WEBP · ≤10MB</span>
+          </div>
+
+          <div id="dropzone" class="dropzone" role="button" tabindex="0">
+            <input id="file-input" class="file-input" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.webp" required />
+            <div class="paper-icon" aria-hidden="true">
+              <span class="chip mono">PDF</span>
+            </div>
+            <div class="dropzone-copy">
+              <strong class="serif">把试卷拖到这里</strong>
+              <span>或者点击选择文件 · 自动识别学科</span>
+            </div>
+            <button id="browse-file" class="btn" type="button">浏览文件</button>
+          </div>
+
+          <div id="file-preview" class="file-preview is-empty">
+            <div class="file-meta">
+              <span class="dot accent-bg"></span>
+              <span id="file-name" class="mono">尚未选择文件</span>
+              <span id="file-detail" class="muted hide-sm"></span>
+            </div>
+            <button id="remove-file" type="button" class="text-link" hidden>移除</button>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">§ 02</span>
+              <h2>试卷设置</h2>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label class="field">
+              <span>学科</span>
+              <select class="select" name="subject">
+                <option value="auto">自动判断</option>
+                <option value="math">数学</option>
+                <option value="physics">物理</option>
+                <option value="english">英语</option>
+                <option value="other">其他</option>
+              </select>
+              <small>告诉模型如何理解题型与符号。</small>
+            </label>
+            <label class="field">
+              <span>图形策略 <b class="accent">★</b></span>
+              <select class="select" name="diagram_strategy">
+                <option value="source_crop_first">复杂图形优先原图带留白裁切</option>
+                <option value="tikz_when_safe">简单规则图形才重绘</option>
+                <option value="tikz_first">尽量 LaTeX / TikZ 重绘</option>
+              </select>
+              <small>这一项最影响数学/物理试卷的还原度。</small>
+            </label>
+          </div>
+
+          <details class="strategy-details">
+            <summary>
+              <span>三种图形策略到底有什么差别？</span>
+              <span class="mono muted">▾</span>
+            </summary>
+            <div class="strategy-grid">
+              <p><b>原图裁切</b><br /><span>几何图、函数图、电路图保真度最高，PDF 体积较大。</span></p>
+              <p><b>混合重绘</b><br /><span>规则图形重绘为矢量，复杂图形保留原图。推荐。</span></p>
+              <p><b>全量重绘</b><br /><span>体积最小、最干净，但复杂图形可能失真。</span></p>
+            </div>
+          </details>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">§ 03</span>
+              <h2>AI 配置</h2>
+            </div>
+            <button id="test-connection" class="text-link" type="button">测试连接 →</button>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Provider</span>
+              <select class="select" name="provider">
+                <option value="openai">OpenAI / OpenAI-compatible</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Model</span>
+              <input class="input mono" name="model" value="gpt-5.5" required />
+            </label>
+            <label class="field wide">
+              <span>Base URL</span>
+              <input class="input mono" name="base_url" value="https://api.openai.com/v1" required />
+            </label>
+            <label class="field wide">
+              <span>API Key</span>
+              <span class="password-row">
+                <input id="api-key-input" class="input" name="api_key" type="password" autocomplete="off" required />
+                <button id="toggle-api-key" class="plain-button" type="button">显示</button>
+              </span>
+              <small><span class="dot ok"></span>只随本次任务发送给服务端，任务完成后立即删除临时密钥文件。</small>
+            </label>
+          </div>
+
+          <label class="save-config">
+            <input id="save-config" type="checkbox" />
+            <span>
+              <strong>保存 AI 配置到本浏览器（LocalStorage）</strong>
+              <small>仅保存在你这台设备的浏览器里。取消勾选会立即清除。</small>
+            </span>
+            <b class="chip mono">本机</b>
+          </label>
+        </section>
+
+        <section class="submit-row">
+          <p>提交即表示你同意临时使用你的 API Key 调用所选模型。生成的 PDF 将在 24 小时后自动清理。</p>
+          <button id="submit-button" class="btn large" type="submit">生成习题 & 答案 <span class="mono">↵</span></button>
+        </section>
       </form>
 
-      <section id="status" class="panel">
-        <p class="hint">等待提交任务。</p>
-      </section>
+      <aside class="live-column" aria-label="任务状态与下载结果">
+        <section id="status-panel" class="status-card">
+          <div class="status-card-head">
+            <span><span id="status-dot" class="dot"></span><b id="status-title">等待提交</b></span>
+            <span id="status-job-id" class="mono">job · ----</span>
+          </div>
+          <div class="status-card-body">
+            <div class="status-main">
+              <strong id="status-phase" class="serif">准备就绪</strong>
+              <span class="mono num"><b id="status-progress">0</b><small>%</small></span>
+            </div>
+            <div class="progress"><div id="progress-bar"></div></div>
+            <div class="status-sub mono">
+              <span id="queue-text">等待上传文件</span>
+              <span id="elapsed-text">每 2.5s 自动刷新</span>
+            </div>
+            <ol id="event-timeline" class="timeline">
+              <li class="muted">提交任务后会在这里显示处理进度。</li>
+            </ol>
+            <div id="token-panel" class="token-grid is-empty">
+              <div><span>输入</span><b class="mono num">0</b></div>
+              <div><span>输出</span><b class="mono num">0</b></div>
+              <div><span>合计</span><b class="mono num">0</b></div>
+            </div>
+            <p id="error-message" class="error" hidden></p>
+          </div>
+        </section>
 
-      <section id="results" class="panel"></section>
-
-      <section class="panel">
-        <h2>最近任务</h2>
-        <div id="recent-jobs"></div>
-      </section>
+        <section id="results-panel" class="result-card">
+          <div class="panel-heading">
+            <div>
+              <span class="section-index">§ 04</span>
+              <h3>下载结果</h3>
+            </div>
+            <span id="result-state" class="chip mono">待完成</span>
+          </div>
+          <ul id="download-list" class="download-list"></ul>
+          <div class="expiry-row mono">
+            <span>过期清理倒计时</span>
+            <span id="expiry-countdown">-- : -- : --</span>
+          </div>
+        </section>
+      </aside>
     </main>
-    <script src="/static/app.js"></script>
+
+    <section id="recent" class="recent-section">
+      <div class="shell">
+        <div class="recent-head">
+          <div>
+            <span class="section-index">§ 05</span>
+            <h2>最近任务</h2>
+            <p>保存在你的浏览器，刷新页面也能找回。最多 8 条。</p>
+          </div>
+          <button id="clear-recent" class="text-link" type="button">清空全部</button>
+        </div>
+        <div class="recent-table-wrap">
+          <div id="recent-jobs" class="recent-table"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy" class="privacy-section">
+      <div class="shell privacy-grid">
+        <div>
+          <span class="section-index">§ 06</span>
+          <h2 class="serif">我们 <em>不</em> 留你的<br />API Key。</h2>
+          <p>密钥只在任务期间临时使用，任务完成立刻删除临时文件，从不写入数据库。生成的 PDF 24 小时后自动清理。</p>
+        </div>
+        <div id="how" class="privacy-cards">
+          <article>
+            <span class="mono">01</span>
+            <h3>浏览器侧</h3>
+            <p>AI 配置可选择保存到你的 LocalStorage，也可以完全不保存。</p>
+          </article>
+          <article>
+            <span class="mono">02</span>
+            <h3>服务端</h3>
+            <p>SQLite 保存任务元数据、状态、进度和产物路径，不保存 API Key。</p>
+          </article>
+          <article id="limits">
+            <span class="mono">03</span>
+            <h3>配额</h3>
+            <p>同 IP 同时 1 个任务、每小时最多 5 个、全站排队/运行最多 2 个。</p>
+          </article>
+          <article>
+            <span class="mono">04</span>
+            <h3>开源</h3>
+            <p>前后端完全开源，可以直接查看源码或自己部署一份。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <footer id="help" class="footer">
+      <div class="shell footer-inner">
+        <div class="footer-brand">
+          <span class="brand-mark invert">P</span>
+          <span class="serif">PDF Exercise Maker</span>
+          <span class="chip mono invert-chip">MVP</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/VeryInt/pdf-exercise-web" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="#privacy">隐私</a>
+          <a href="/docs" target="_blank">API 文档</a>
+          <a href="https://github.com/VeryInt/pdf-exercise-web/issues" target="_blank" rel="noreferrer">联系</a>
+          <span class="mono">© 2026</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="/static/app.js?v=20260623-1"></script>
   </body>
 </html>

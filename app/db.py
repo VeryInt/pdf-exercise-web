@@ -43,6 +43,7 @@ def init_db() -> None:
                 subject TEXT NOT NULL,
                 diagram_strategy TEXT NOT NULL,
                 original_filename TEXT NOT NULL,
+                client_id TEXT NOT NULL DEFAULT '',
                 client_ip TEXT NOT NULL DEFAULT '',
                 upload_path TEXT NOT NULL,
                 work_dir TEXT NOT NULL,
@@ -54,6 +55,8 @@ def init_db() -> None:
             """
         )
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        if "client_id" not in columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN client_id TEXT NOT NULL DEFAULT ''")
         if "client_ip" not in columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN client_ip TEXT NOT NULL DEFAULT ''")
         conn.execute(
@@ -75,6 +78,7 @@ def create_job(
     subject: str,
     diagram_strategy: str,
     original_filename: str,
+    client_id: str,
     client_ip: str,
     upload_path: Path,
     work_dir: Path,
@@ -85,14 +89,15 @@ def create_job(
             """
             INSERT INTO jobs (
                 id, status, progress, subject, diagram_strategy, original_filename,
-                client_ip, upload_path, work_dir, created_at, updated_at
-            ) VALUES (?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?)
+                client_id, client_ip, upload_path, work_dir, created_at, updated_at
+            ) VALUES (?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job_id,
                 subject,
                 diagram_strategy,
                 original_filename,
+                client_id,
                 client_ip,
                 str(upload_path),
                 str(work_dir),

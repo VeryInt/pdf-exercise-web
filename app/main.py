@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -41,8 +43,11 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; connect-src 'self'"
+        "default-src 'self'; "
+        "script-src 'self' https://static.cloudflareinsights.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' https://cloudflareinsights.com"
     )
     return response
 
@@ -50,6 +55,25 @@ async def add_security_headers(request: Request, call_next):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    return Response(status_code=204)
+
+
+@app.get("/api/status")
+def system_status(request: Request) -> dict[str, int | str]:
+    client_ip = client_ip_from_request(request)
+    return {
+        "status": "ok",
+        "active_jobs": active_job_count(),
+        "max_active_jobs": settings.max_active_jobs,
+        "hourly_jobs_for_ip": hourly_job_count_for_ip(client_ip),
+        "max_jobs_per_ip_per_hour": settings.max_jobs_per_ip_per_hour,
+        "max_upload_mb": settings.max_upload_mb,
+        "max_active_jobs_per_ip": settings.max_active_jobs_per_ip,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -71,6 +95,31 @@ def client_ip_from_request(request: Request) -> str:
     if forwarded:
         return forwarded.split(",", 1)[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def client_id_from_request(request: Request, fallback: str = "") -> str:
+    return (request.headers.get("X-Client-Id") or fallback or "").strip()
+
+
+def require_client_id(client_id: str) -> str:
+    if not client_id:
+        raise HTTPException(status_code=422, detail="缺少浏览器任务身份，请刷新页面后重试。")
+    return client_id
+
+
+def require_job_for_client(job_id: str, client_id: str) -> dict:
+    job = get_job(job_id)
+    if not job or not client_id or job.get("client_id") != client_id:
+        raise HTTPException(status_code=404, detail="任务不存在。")
+    return job
+
+
+def expires_at_from_created_at(created_at: str) -> str | None:
+    try:
+        created = datetime.fromisoformat(created_at)
+        return (created + timedelta(hours=settings.job_retention_hours)).isoformat()
+    except ValueError:
+        return None
 
 
 def enforce_job_limits(client_ip: str) -> None:
@@ -98,10 +147,12 @@ async def create_job_endpoint(
     base_url: str = Form("https://api.openai.com/v1"),
     model: str = Form("gpt-5.5"),
     api_key: str = Form(""),
+    client_id: str = Form(""),
 ):
     if not api_key.strip():
         raise HTTPException(status_code=422, detail="请填写 API Key。")
 
+    client_id = require_client_id(client_id)
     client_ip = client_ip_from_request(request)
     enforce_job_limits(client_ip)
 
@@ -136,6 +187,7 @@ async def create_job_endpoint(
         subject=subject,
         diagram_strategy=diagram_strategy,
         original_filename=file.filename or upload_name,
+        client_id=client_id,
         client_ip=client_ip,
         upload_path=upload_path,
         work_dir=work_dir,
@@ -144,21 +196,25 @@ async def create_job_endpoint(
 
 
 @app.get("/api/jobs/{job_id}")
-def job_status(job_id: str):
-    job = get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="任务不存在。")
+def job_status(request: Request, job_id: str, client_id: str = Query(default="")):
+    client_id = client_id_from_request(request, client_id)
+    job = require_job_for_client(job_id, client_id)
     artifacts = artifacts_for(job)
+    encoded_client_id = quote(client_id)
     return {
         "id": job["id"],
         "status": job["status"],
         "progress": job["progress"],
         "subject": job["subject"],
         "diagram_strategy": job["diagram_strategy"],
+        "original_filename": job["original_filename"],
+        "created_at": job["created_at"],
+        "updated_at": job["updated_at"],
+        "expires_at": expires_at_from_created_at(job["created_at"]),
         "error": job["error"],
         "queue_position": queue_position(job_id),
         "active_jobs": active_job_count(),
-        "artifacts": {key: f"/api/jobs/{job_id}/artifacts/{key}" for key in artifacts},
+        "artifacts": {key: f"/api/jobs/{job_id}/artifacts/{key}?client_id={encoded_client_id}" for key in artifacts},
         "token_usage": load_token_usage(artifacts),
         "events": list_events(job_id),
     }
@@ -175,17 +231,16 @@ def load_token_usage(artifacts: dict[str, str]) -> dict | None:
 
 
 @app.get("/api/jobs/{job_id}/events")
-def job_events(job_id: str):
-    if not get_job(job_id):
-        raise HTTPException(status_code=404, detail="任务不存在。")
+def job_events(request: Request, job_id: str, client_id: str = Query(default="")):
+    client_id = client_id_from_request(request, client_id)
+    require_job_for_client(job_id, client_id)
     return {"events": list_events(job_id)}
 
 
 @app.get("/api/jobs/{job_id}/artifacts/{kind}")
-def download_artifact(job_id: str, kind: str):
-    job = get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="任务不存在。")
+def download_artifact(request: Request, job_id: str, kind: str, client_id: str = Query(default="")):
+    client_id = client_id_from_request(request, client_id)
+    job = require_job_for_client(job_id, client_id)
     artifacts = artifacts_for(job)
     if kind not in artifacts:
         raise HTTPException(status_code=404, detail="文件不存在。")
