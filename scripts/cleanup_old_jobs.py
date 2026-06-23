@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
-from app.db import connect, init_db
+from app.db import connect, delete_visitor_events_before, init_db
 
 
 def main() -> None:
@@ -22,7 +22,10 @@ def main() -> None:
             shutil.rmtree(settings.artifacts_dir / row["id"], ignore_errors=True)
         conn.execute("DELETE FROM job_events WHERE job_id IN (SELECT id FROM jobs WHERE created_at < ?)", (cutoff_text,))
         conn.execute("DELETE FROM jobs WHERE created_at < ?", (cutoff_text,))
-    print(f"Cleaned {len(rows)} expired jobs.")
+
+    visitor_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.visitor_event_retention_days)
+    deleted_events = delete_visitor_events_before(visitor_cutoff.isoformat())
+    print(f"Cleaned {len(rows)} expired jobs and {deleted_events} visitor events.")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,11 @@ from app.db import (
     init_db,
     list_events,
     queue_position,
+    recent_visitor_events,
+    record_visitor_event,
+    visitor_daily_counts,
+    visitor_ip_rank,
+    visitor_summary,
 )
 
 app = FastAPI(title="PDF Exercise Maker")
@@ -78,6 +83,7 @@ def system_status(request: Request) -> dict[str, int | str]:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    record_request_event(request, event_type="page_view")
     return templates.TemplateResponse("index.html", {"request": request})
 
 
@@ -99,6 +105,19 @@ def client_ip_from_request(request: Request) -> str:
 
 def client_id_from_request(request: Request, fallback: str = "") -> str:
     return (request.headers.get("X-Client-Id") or fallback or "").strip()
+
+
+def record_request_event(request: Request, *, event_type: str, job_id: str = "", client_id: str = "") -> None:
+    record_visitor_event(
+        event_type=event_type,
+        client_ip=client_ip_from_request(request),
+        client_id=client_id_from_request(request, client_id),
+        method=request.method,
+        path=request.url.path,
+        user_agent=request.headers.get("user-agent", ""),
+        referer=request.headers.get("referer", ""),
+        job_id=job_id,
+    )
 
 
 def require_client_id(client_id: str) -> str:
@@ -192,6 +211,7 @@ async def create_job_endpoint(
         upload_path=upload_path,
         work_dir=work_dir,
     )
+    record_request_event(request, event_type="job_created", job_id=job_id, client_id=client_id)
     return {"job_id": job_id, "queue_position": queue_position(job_id), "active_jobs": active_job_count()}
 
 
@@ -248,4 +268,44 @@ def download_artifact(request: Request, job_id: str, kind: str, client_id: str =
     if not path.exists():
         raise HTTPException(status_code=404, detail="文件已被清理。")
     media_type = "application/pdf" if path.suffix.lower() == ".pdf" else "application/octet-stream"
+    record_request_event(request, event_type="artifact_download", job_id=job_id, client_id=client_id)
     return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+def require_stats_token(token: str) -> None:
+    expected = settings.visitor_stats_token.strip()
+    if not expected or token != expected:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+def utc_cutoff(days: int = 0, hours: int = 0) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days, hours=hours)).isoformat()
+
+
+def short(value: str, length: int = 8) -> str:
+    return value[:length] if value else ""
+
+
+def compact_user_agent(value: str) -> str:
+    if not value:
+        return ""
+    return value[:90] + ("..." if len(value) > 90 else "")
+
+
+@app.get("/internal/visitors", response_class=HTMLResponse, include_in_schema=False)
+def visitor_stats_page(request: Request, token: str = Query(default="")):
+    require_stats_token(token)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    context = {
+        "request": request,
+        "today": visitor_summary(since=today),
+        "last_24h": visitor_summary(since=utc_cutoff(hours=24)),
+        "last_7d": visitor_summary(since=utc_cutoff(days=7)),
+        "daily": visitor_daily_counts(since=utc_cutoff(days=7)),
+        "recent_events": recent_visitor_events(limit=100),
+        "ip_rank_24h": visitor_ip_rank(since=utc_cutoff(hours=24), limit=20),
+        "ip_rank_7d": visitor_ip_rank(since=utc_cutoff(days=7), limit=20),
+        "short": short,
+        "compact_user_agent": compact_user_agent,
+    }
+    return templates.TemplateResponse("visitor_stats.html", context)

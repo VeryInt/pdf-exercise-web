@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     max_active_jobs_per_ip: int = 1
     max_jobs_per_ip_per_hour: int = 5
     worker_poll_seconds: int = 3
+    visitor_stats_token: str = ""
+    visitor_event_retention_days: int = 90
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

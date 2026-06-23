@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Visitor Stats - PDF Exercise Maker</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230e1014'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia,serif' font-size='36' font-style='italic' fill='%23f6f4ee'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/static/style.css?v=20260623-1" />
+  </head>
+  <body>
+    <main class="shell stats-page">
+      <header class="stats-hero">
+        <span class="chip mono">Internal - Visitor Stats</span>
+        <h1>访问者记录</h1>
+        <p>隐藏统计页。记录访问、任务创建和下载事件，不记录 API Key、试卷内容或生成结果内容。</p>
+      </header>
+
+      <section class="stats-grid">
+        <article>
+          <span>今日访问</span>
+          <strong class="serif num">{{ today.page_views }}</strong>
+        </article>
+        <article>
+          <span>今日独立 IP</span>
+          <strong class="serif num">{{ today.unique_ips }}</strong>
+        </article>
+        <article>
+          <span>今日独立浏览器</span>
+          <strong class="serif num">{{ today.unique_clients }}</strong>
+        </article>
+        <article>
+          <span>今日任务提交</span>
+          <strong class="serif num accent">{{ today.job_created }}</strong>
+        </article>
+      </section>
+
+      <section class="stats-section">
+        <div class="panel-heading">
+          <div>
+            <span class="section-index">§ 01</span>
+            <h2>近 7 天趋势</h2>
+          </div>
+          <span class="chip mono">UTC</span>
+        </div>
+        <div class="stats-table-wrap">
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>访问</th>
+                <th>任务</th>
+                <th>独立 IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in daily %}
+                <tr>
+                  <td class="mono">{{ row.day }}</td>
+                  <td>{{ row.page_views or 0 }}</td>
+                  <td>{{ row.job_created or 0 }}</td>
+                  <td>{{ row.unique_ips or 0 }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="4" class="muted">暂无数据。</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="stats-columns">
+        <div class="stats-section">
+          <div class="panel-heading">
+            <div>
+              <span class="section-index">§ 02</span>
+              <h2>IP 排名 · 24h</h2>
+            </div>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>IP</th>
+                  <th>事件</th>
+                  <th>任务</th>
+                  <th>最后访问</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in ip_rank_24h %}
+                  <tr>
+                    <td class="mono">{{ row.client_ip }}</td>
+                    <td>{{ row.total_events }}</td>
+                    <td>{{ row.job_created or 0 }}</td>
+                    <td class="mono">{{ row.last_seen[11:19] if row.last_seen else '' }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="muted">暂无数据。</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="stats-section">
+          <div class="panel-heading">
+            <div>
+              <span class="section-index">§ 03</span>
+              <h2>IP 排名 · 7d</h2>
+            </div>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>IP</th>
+                  <th>事件</th>
+                  <th>任务</th>
+                  <th>浏览器</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in ip_rank_7d %}
+                  <tr>
+                    <td class="mono">{{ row.client_ip }}</td>
+                    <td>{{ row.total_events }}</td>
+                    <td>{{ row.job_created or 0 }}</td>
+                    <td>{{ row.unique_clients or 0 }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="muted">暂无数据。</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="stats-section">
+        <div class="panel-heading">
+          <div>
+            <span class="section-index">§ 04</span>
+            <h2>最近 100 条事件</h2>
+          </div>
+          <span class="chip mono">latest</span>
+        </div>
+        <div class="stats-table-wrap">
+          <table class="stats-table wide">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>事件</th>
+                <th>IP</th>
+                <th>Client</th>
+                <th>Path</th>
+                <th>Job</th>
+                <th>User-Agent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for event in recent_events %}
+                <tr>
+                  <td class="mono">{{ event.created_at[:19].replace('T', ' ') }}</td>
+                  <td>{{ event.event_type }}</td>
+                  <td class="mono">{{ event.client_ip }}</td>
+                  <td class="mono">{{ short(event.client_id) }}</td>
+                  <td class="mono">{{ event.path }}</td>
+                  <td class="mono">{{ short(event.job_id) }}</td>
+                  <td title="{{ event.user_agent }}">{{ compact_user_agent(event.user_agent) }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="7" class="muted">暂无数据。</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

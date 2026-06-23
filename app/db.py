@@ -70,6 +70,24 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS visitor_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                client_ip TEXT NOT NULL DEFAULT '',
+                client_id TEXT NOT NULL DEFAULT '',
+                method TEXT NOT NULL DEFAULT '',
+                path TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                referer TEXT NOT NULL DEFAULT '',
+                job_id TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_visitor_events_created_at ON visitor_events(created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_visitor_events_type_created_at ON visitor_events(event_type, created_at)")
 
 
 def create_job(
@@ -230,3 +248,117 @@ def artifacts_for(job: dict[str, Any]) -> dict[str, str]:
         return loaded if isinstance(loaded, dict) else {}
     except json.JSONDecodeError:
         return {}
+
+
+def record_visitor_event(
+    *,
+    event_type: str,
+    client_ip: str,
+    client_id: str = "",
+    method: str = "",
+    path: str = "",
+    user_agent: str = "",
+    referer: str = "",
+    job_id: str = "",
+) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO visitor_events (
+                event_type, client_ip, client_id, method, path, user_agent,
+                referer, job_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_type,
+                client_ip,
+                client_id,
+                method,
+                path,
+                user_agent[:500],
+                referer[:500],
+                job_id,
+                utc_now(),
+            ),
+        )
+
+
+def visitor_summary(*, since: str) -> dict[str, int]:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total_events,
+                COUNT(DISTINCT NULLIF(client_ip, '')) AS unique_ips,
+                COUNT(DISTINCT NULLIF(client_id, '')) AS unique_clients,
+                SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views,
+                SUM(CASE WHEN event_type = 'job_created' THEN 1 ELSE 0 END) AS job_created,
+                SUM(CASE WHEN event_type = 'artifact_download' THEN 1 ELSE 0 END) AS artifact_downloads
+            FROM visitor_events
+            WHERE created_at >= ?
+            """,
+            (since,),
+        ).fetchone()
+    return {key: int(row[key] or 0) for key in row.keys()}
+
+
+def visitor_daily_counts(*, since: str) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                substr(created_at, 1, 10) AS day,
+                SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views,
+                SUM(CASE WHEN event_type = 'job_created' THEN 1 ELSE 0 END) AS job_created,
+                COUNT(DISTINCT NULLIF(client_ip, '')) AS unique_ips
+            FROM visitor_events
+            WHERE created_at >= ?
+            GROUP BY substr(created_at, 1, 10)
+            ORDER BY day
+            """,
+            (since,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def recent_visitor_events(*, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT event_type, client_ip, client_id, method, path, user_agent, referer, job_id, created_at
+            FROM visitor_events
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def visitor_ip_rank(*, since: str, limit: int = 20) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                client_ip,
+                COUNT(*) AS total_events,
+                SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views,
+                SUM(CASE WHEN event_type = 'job_created' THEN 1 ELSE 0 END) AS job_created,
+                COUNT(DISTINCT NULLIF(client_id, '')) AS unique_clients,
+                MAX(created_at) AS last_seen
+            FROM visitor_events
+            WHERE created_at >= ? AND client_ip != ''
+            GROUP BY client_ip
+            ORDER BY total_events DESC, last_seen DESC
+            LIMIT ?
+            """,
+            (since, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_visitor_events_before(cutoff: str) -> int:
+    with connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM visitor_events WHERE created_at < ?", (cutoff,)).fetchone()
+        conn.execute("DELETE FROM visitor_events WHERE created_at < ?", (cutoff,))
+    return int(row["count"])

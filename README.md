@@ -22,6 +22,7 @@
 - MVP 限制：单文件 10MB、全局 queued/running 最多 2 个、同 IP 同时最多 1 个任务、同 IP 每小时最多 5 个任务。
 - 服务端任务超过 24 小时会被清理，包括上传文件、任务目录、产物文件和 SQLite 任务记录。
 - 浏览器 LocalStorage 可保存最近 job_id 和用户自己的 AI 配置。
+- 可选隐藏统计页记录 `page_view`、`job_created`、`artifact_download` 三类事件，方便站长了解访问和使用情况。
 
 ## 安全说明
 
@@ -37,6 +38,8 @@
 网页中的 AI Provider、Base URL、Model、API Key 默认由用户在浏览器填写。API Key 提交任务时会临时传给服务端，服务端写入任务目录里的临时 `secrets.json`，worker 读取后立即删除，不写入 SQLite。
 
 最近任务列表保存在用户自己的浏览器 LocalStorage 中，只保存任务引用和展示用元数据。服务端 24 小时清理不会主动删除用户浏览器里的 LocalStorage；如果任务已过期，用户再次查看时会得到任务不存在或文件已清理的提示。
+
+隐藏统计页只记录 IP、匿名浏览器 `client_id`、User-Agent、路径和任务 ID 引用，不记录 API Key、Base URL、上传文件内容、PDF 内容或答案内容。真实 `VISITOR_STATS_TOKEN` 必须只放在部署环境的 `.env`，不要提交到 Git。
 
 ## 本地运行
 
@@ -91,6 +94,23 @@ bash deploy/install_vps.sh
 ```
 
 注意：`PDF_EXERCISE_ORIGIN_KEY_FILE` 必须是私钥文件。只有证书 `.pem` 不够，Nginx 启用 `listen 443 ssl` 必须同时拥有证书和对应私钥。
+
+## 隐藏统计页
+
+如果需要查看访问者记录，在 `.env` 中设置：
+
+```bash
+VISITOR_STATS_TOKEN=change-me
+VISITOR_EVENT_RETENTION_DAYS=90
+```
+
+访问方式：
+
+```text
+https://your-domain.example/internal/visitors?token=change-me
+```
+
+这个入口不会出现在首页导航或页脚中。未设置 token、缺少 token 或 token 错误时都会返回 `404`，避免公开暴露统计页面。访问日志默认保留 90 天，并由清理脚本随过期任务一起清理。
 
 ## 远程部署脚本
 
