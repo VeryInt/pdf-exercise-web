@@ -72,6 +72,17 @@ def load_and_delete_secrets(work_dir: Path) -> dict[str, str]:
         raise ValueError("任务缺少临时 API 配置。")
     secrets = json.loads(secrets_path.read_text(encoding="utf-8"))
     secrets_path.unlink(missing_ok=True)
+    if secrets.get("shared_access") is True:
+        api_key = settings.shared_ai_api_key.strip()
+        base_url = settings.shared_ai_base_url.strip()
+        if not api_key or not base_url:
+            raise ValueError("共享 AI 配置尚未启用。")
+        return {
+            "provider": settings.shared_ai_provider.strip() or "openai",
+            "base_url": base_url,
+            "model": settings.shared_ai_model.strip() or "gpt-5.5",
+            "api_key": api_key,
+        }
     api_key = str(secrets.get("api_key") or "").strip()
     if not api_key:
         raise ValueError("API Key 为空。")

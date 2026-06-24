@@ -20,6 +20,7 @@ const configKey = "pdfExerciseMakerConfig";
 const clientIdKey = "pdfExerciseMakerClientId";
 const recentJobsKey = "pdfExerciseMakerRecentJobs";
 const sessionStatsKey = "pdfExerciseMakerSessionStats";
+const serviceTokenKey = "pdfExerciseMakerServiceToken";
 
 let pollTimer = null;
 let currentJobId = null;
@@ -43,8 +44,36 @@ function getClientId() {
   return clientId;
 }
 
+function captureServiceToken() {
+  const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const token = (fragment.get("token") || "").trim();
+  if (token) {
+    sessionStorage.setItem(serviceTokenKey, token);
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }
+  return sessionStorage.getItem(serviceTokenKey) || "";
+}
+
+function getServiceToken() {
+  return sessionStorage.getItem(serviceTokenKey) || "";
+}
+
 function headers() {
-  return { "X-Client-Id": getClientId() };
+  const result = { "X-Client-Id": getClientId() };
+  const serviceToken = getServiceToken();
+  if (serviceToken) result["X-Service-Token"] = serviceToken;
+  return result;
+}
+
+function setSharedAccessState(enabled) {
+  const banner = document.querySelector("#shared-access-banner");
+  banner.hidden = !enabled;
+  for (const name of ["provider", "base_url", "model", "api_key"]) {
+    const field = document.querySelector(`[name="${name}"]`);
+    if (field) field.disabled = enabled;
+  }
+  apiKeyInput.required = !enabled;
+  saveConfig.closest(".save-config").hidden = enabled;
 }
 
 function readJsonStorage(key, fallback) {
@@ -411,14 +440,19 @@ async function poll(jobId) {
 
 async function refreshSystemStatus() {
   try {
-    const response = await fetch("/api/status");
+    const response = await fetch("/api/status", { headers: headers() });
     if (!response.ok) return;
     const status = await response.json();
     document.querySelector("#active-jobs").textContent = `${status.active_jobs}/${status.max_active_jobs}`;
-    document.querySelector("#ip-quota").textContent = `${status.hourly_jobs_for_ip} / ${status.max_jobs_per_ip_per_hour}`;
+    document.querySelector("#ip-quota").textContent = status.hourly_limit_exempt
+      ? "共享授权 · 不限小时次数"
+      : `${status.hourly_jobs_for_ip} / ${status.max_jobs_per_ip_per_hour}`;
     document.querySelector("#max-upload").textContent = String(status.max_upload_mb);
     document.querySelector("#queue-limit").textContent = String(status.max_active_jobs);
     document.querySelector("#ip-active-limit").textContent = String(status.max_active_jobs_per_ip);
+    const location = [status.visitor_country, status.visitor_as_name].filter(Boolean).join(" · ");
+    document.querySelector("#visitor-location").textContent = `访问来源：${location || "未知"}`;
+    setSharedAccessState(Boolean(status.shared_access_authorized));
   } catch {}
 }
 
@@ -468,7 +502,11 @@ toggleApiKey.addEventListener("click", () => {
 });
 
 testConnection.addEventListener("click", () => {
-  renderSubmitError("当前版本会在提交任务时验证模型连接。");
+  renderSubmitError(
+    document.querySelector("#shared-access-banner").hidden
+      ? "当前版本会在提交任务时验证模型连接。"
+      : "共享 AI 配置已由服务端启用，会在提交任务时验证。",
+  );
 });
 
 clearRecent.addEventListener("click", () => {
@@ -531,7 +569,9 @@ setInterval(() => {
   if (expiry.dataset.expiresAt) expiry.textContent = formatCountdown(expiry.dataset.expiresAt);
 }, 1000);
 
+captureServiceToken();
 clientIdField.value = getClientId();
+if (getServiceToken()) apiKeyInput.required = false;
 loadConfig();
 renderRecentJobs();
 renderDownloads(null);

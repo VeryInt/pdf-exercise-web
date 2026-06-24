@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -29,6 +30,7 @@ from app.db import (
     visitor_ip_rank,
     visitor_summary,
 )
+from app.ipinfo import lookup_ip_geo, lookup_ip_geos
 
 app = FastAPI(title="PDF Exercise Maker")
 templates = Jinja2Templates(directory="templates")
@@ -68,8 +70,10 @@ def favicon() -> Response:
 
 
 @app.get("/api/status")
-def system_status(request: Request) -> dict[str, int | str]:
+def system_status(request: Request) -> dict[str, object]:
     client_ip = client_ip_from_request(request)
+    geo = lookup_ip_geo(client_ip)
+    shared_authorized = shared_access_authorized(request)
     return {
         "status": "ok",
         "active_jobs": active_job_count(),
@@ -78,13 +82,24 @@ def system_status(request: Request) -> dict[str, int | str]:
         "max_jobs_per_ip_per_hour": settings.max_jobs_per_ip_per_hour,
         "max_upload_mb": settings.max_upload_mb,
         "max_active_jobs_per_ip": settings.max_active_jobs_per_ip,
+        "visitor_country": geo.get("country") or "",
+        "visitor_country_code": geo.get("country_code") or "",
+        "visitor_as_name": geo.get("as_name") or "",
+        "shared_access_authorized": shared_authorized,
+        "hourly_limit_exempt": shared_authorized,
     }
 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     record_request_event(request, event_type="page_view")
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "feishu_qr_available": (Path("static") / "feishu-qr.png").exists(),
+        },
+    )
 
 
 def safe_filename(name: str) -> str:
@@ -133,6 +148,13 @@ def require_job_for_client(job_id: str, client_id: str) -> dict:
     return job
 
 
+def shared_access_authorized(request: Request) -> bool:
+    expected = settings.shared_access_token.strip()
+    supplied = request.headers.get("X-Service-Token", "").strip()
+    shared_config_ready = bool(settings.shared_ai_api_key.strip() and settings.shared_ai_base_url.strip())
+    return bool(expected and supplied and shared_config_ready and hmac.compare_digest(supplied, expected))
+
+
 def expires_at_from_created_at(created_at: str) -> str | None:
     try:
         created = datetime.fromisoformat(created_at)
@@ -141,7 +163,7 @@ def expires_at_from_created_at(created_at: str) -> str | None:
         return None
 
 
-def enforce_job_limits(client_ip: str) -> None:
+def enforce_job_limits(client_ip: str, *, hourly_limit_exempt: bool = False) -> None:
     active_total = active_job_count()
     if active_total >= settings.max_active_jobs:
         raise HTTPException(
@@ -151,9 +173,10 @@ def enforce_job_limits(client_ip: str) -> None:
     active_for_ip = active_job_count_for_ip(client_ip)
     if active_for_ip >= settings.max_active_jobs_per_ip:
         raise HTTPException(status_code=429, detail="同一 IP 同时只能有 1 个排队或运行中的任务。")
-    hourly_for_ip = hourly_job_count_for_ip(client_ip)
-    if hourly_for_ip >= settings.max_jobs_per_ip_per_hour:
-        raise HTTPException(status_code=429, detail="同一 IP 每小时最多提交 5 个任务，请稍后再试。")
+    if not hourly_limit_exempt:
+        hourly_for_ip = hourly_job_count_for_ip(client_ip)
+        if hourly_for_ip >= settings.max_jobs_per_ip_per_hour:
+            raise HTTPException(status_code=429, detail="同一 IP 每小时最多提交 5 个任务，请稍后再试。")
 
 
 @app.post("/api/jobs")
@@ -168,12 +191,13 @@ async def create_job_endpoint(
     api_key: str = Form(""),
     client_id: str = Form(""),
 ):
-    if not api_key.strip():
+    use_shared_access = shared_access_authorized(request)
+    if not use_shared_access and not api_key.strip():
         raise HTTPException(status_code=422, detail="请填写 API Key。")
 
     client_id = require_client_id(client_id)
     client_ip = client_ip_from_request(request)
-    enforce_job_limits(client_ip)
+    enforce_job_limits(client_ip, hourly_limit_exempt=use_shared_access)
 
     content = await file.read()
     max_bytes = settings.max_upload_mb * 1024 * 1024
@@ -188,18 +212,17 @@ async def create_job_endpoint(
     upload_path.write_bytes(content)
 
     secrets_path = work_dir / "secrets.json"
-    secrets_path.write_text(
-        json.dumps(
-            {
-                "provider": provider,
-                "base_url": base_url,
-                "model": model,
-                "api_key": api_key,
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+    secrets = (
+        {"shared_access": True}
+        if use_shared_access
+        else {
+            "provider": provider,
+            "base_url": base_url,
+            "model": model,
+            "api_key": api_key,
+        }
     )
+    secrets_path.write_text(json.dumps(secrets, ensure_ascii=False), encoding="utf-8")
 
     create_job(
         job_id=job_id,
@@ -212,7 +235,12 @@ async def create_job_endpoint(
         work_dir=work_dir,
     )
     record_request_event(request, event_type="job_created", job_id=job_id, client_id=client_id)
-    return {"job_id": job_id, "queue_position": queue_position(job_id), "active_jobs": active_job_count()}
+    return {
+        "job_id": job_id,
+        "queue_position": queue_position(job_id),
+        "active_jobs": active_job_count(),
+        "shared_access": use_shared_access,
+    }
 
 
 @app.get("/api/jobs/{job_id}")
@@ -296,6 +324,12 @@ def compact_user_agent(value: str) -> str:
 def visitor_stats_page(request: Request, token: str = Query(default="")):
     require_stats_token(token)
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    recent_events = recent_visitor_events(limit=100)
+    ip_rank_24h = visitor_ip_rank(since=utc_cutoff(hours=24), limit=20)
+    ip_rank_7d = visitor_ip_rank(since=utc_cutoff(days=7), limit=20)
+    lookup_ip_geos(
+        [row.get("client_ip", "") for row in recent_events + ip_rank_24h + ip_rank_7d if row.get("client_ip")]
+    )
     context = {
         "request": request,
         "today": visitor_summary(since=today),

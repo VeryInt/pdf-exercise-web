@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PDF Exercise Maker - 试卷整理生成器</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230e1014'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia,serif' font-size='36' font-style='italic' fill='%23f6f4ee'%3EP%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/static/style.css?v=20260623-1" />
+    <link rel="stylesheet" href="/static/style.css?v=20260624-1" />
   </head>
   <body>
     <header class="topbar">
@@ -20,7 +20,8 @@
           <a href="#privacy">隐私说明</a>
           <a href="#limits">配额 & 限制</a>
           <a href="https://github.com/VeryInt/pdf-exercise-web" target="_blank" rel="noreferrer">GitHub</a>
-          <a class="btn small" href="#help">帮助</a>
+          <a href="https://github.com/VeryInt/PDF-Exercise-Maker" target="_blank" rel="noreferrer">Skill</a>
+          <a class="btn small" href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=9d5kc03c-0abc-4bed-ad25-bf54e26fcff2" target="_blank" rel="noreferrer">飞书</a>
         </nav>
       </div>
     </header>
@@ -33,6 +34,8 @@
           <span>活跃 <b id="active-jobs" class="num">0/2</b></span>
           <span class="sep">|</span>
           <span class="hide-sm">本 IP 已用 <b id="ip-quota" class="num">0/5</b></span>
+          <span class="sep hide-md">|</span>
+          <span id="visitor-location" class="hide-md">访问来源：查询中…</span>
         </div>
         <div class="status-inline muted hide-md">
           <span>≤ <span id="max-upload">10</span>MB</span>
@@ -160,6 +163,11 @@
               <h2>AI 配置</h2>
             </div>
             <button id="test-connection" class="text-link" type="button">测试连接 →</button>
+          </div>
+
+          <div id="shared-access-banner" class="shared-access-banner" hidden>
+            <span><span class="dot ok"></span><strong>共享 AI 配置已启用</strong></span>
+            <small>本次会话将使用站点提供的模型配置，无需填写 API Key。</small>
           </div>
 
           <div class="field-grid">
@@ -296,6 +304,22 @@
       </div>
     </section>
 
+    {% if feishu_qr_available %}
+      <section class="community-section">
+        <div class="shell community-inner">
+          <div>
+            <span class="section-index">§ 07</span>
+            <h2 class="serif">加入交流</h2>
+            <p>关于试卷识别、图形还原和部署使用，欢迎通过飞书交流。</p>
+          </div>
+          <a class="community-qr-link" href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=9d5kc03c-0abc-4bed-ad25-bf54e26fcff2" target="_blank" rel="noreferrer">
+            <img src="/static/feishu-qr.png" alt="飞书联系二维码" width="160" height="160" />
+            <span>扫码添加飞书，一起交流</span>
+          </a>
+        </div>
+      </section>
+    {% endif %}
+
     <footer id="help" class="footer">
       <div class="shell footer-inner">
         <div class="footer-brand">
@@ -305,14 +329,14 @@
         </div>
         <div class="footer-links">
           <a href="https://github.com/VeryInt/pdf-exercise-web" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://github.com/VeryInt/PDF-Exercise-Maker" target="_blank" rel="noreferrer">Skill</a>
           <a href="#privacy">隐私</a>
-          <a href="/docs" target="_blank">API 文档</a>
-          <a href="https://github.com/VeryInt/pdf-exercise-web/issues" target="_blank" rel="noreferrer">联系</a>
+          <a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=9d5kc03c-0abc-4bed-ad25-bf54e26fcff2" target="_blank" rel="noreferrer">飞书</a>
           <span class="mono">© 2026</span>
         </div>
       </div>
     </footer>
 
-    <script src="/static/app.js?v=20260623-1"></script>
+    <script src="/static/app.js?v=20260624-1"></script>
   </body>
 </html>

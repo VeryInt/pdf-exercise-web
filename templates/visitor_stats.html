@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Visitor Stats - PDF Exercise Maker</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230e1014'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia,serif' font-size='36' font-style='italic' fill='%23f6f4ee'%3EP%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/static/style.css?v=20260623-1" />
+    <link rel="stylesheet" href="/static/style.css?v=20260624-1" />
   </head>
   <body>
     <main class="shell stats-page">
@@ -81,6 +81,7 @@
               <thead>
                 <tr>
                   <th>IP</th>
+                  <th>国家 / 网络</th>
                   <th>事件</th>
                   <th>任务</th>
                   <th>最后访问</th>
@@ -90,12 +91,16 @@
                 {% for row in ip_rank_24h %}
                   <tr>
                     <td class="mono">{{ row.client_ip }}</td>
+                    <td>
+                      <b>{{ row.country or '未知' }}</b>
+                      <small class="stats-subline">{{ row.as_name or '未知网络' }}</small>
+                    </td>
                     <td>{{ row.total_events }}</td>
                     <td>{{ row.job_created or 0 }}</td>
                     <td class="mono">{{ row.last_seen[11:19] if row.last_seen else '' }}</td>
                   </tr>
                 {% else %}
-                  <tr><td colspan="4" class="muted">暂无数据。</td></tr>
+                  <tr><td colspan="5" class="muted">暂无数据。</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -114,6 +119,7 @@
               <thead>
                 <tr>
                   <th>IP</th>
+                  <th>国家 / 网络</th>
                   <th>事件</th>
                   <th>任务</th>
                   <th>浏览器</th>
@@ -123,12 +129,16 @@
                 {% for row in ip_rank_7d %}
                   <tr>
                     <td class="mono">{{ row.client_ip }}</td>
+                    <td>
+                      <b>{{ row.country or '未知' }}</b>
+                      <small class="stats-subline">{{ row.as_name or '未知网络' }}</small>
+                    </td>
                     <td>{{ row.total_events }}</td>
                     <td>{{ row.job_created or 0 }}</td>
                     <td>{{ row.unique_clients or 0 }}</td>
                   </tr>
                 {% else %}
-                  <tr><td colspan="4" class="muted">暂无数据。</td></tr>
+                  <tr><td colspan="5" class="muted">暂无数据。</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -151,6 +161,7 @@
                 <th>时间</th>
                 <th>事件</th>
                 <th>IP</th>
+                <th>国家 / 网络</th>
                 <th>Client</th>
                 <th>Path</th>
                 <th>Job</th>
@@ -163,13 +174,17 @@
                   <td class="mono">{{ event.created_at[:19].replace('T', ' ') }}</td>
                   <td>{{ event.event_type }}</td>
                   <td class="mono">{{ event.client_ip }}</td>
+                  <td>
+                    <b>{{ event.country or '未知' }}</b>
+                    <small class="stats-subline">{{ event.as_name or '未知网络' }}</small>
+                  </td>
                   <td class="mono">{{ short(event.client_id) }}</td>
                   <td class="mono">{{ event.path }}</td>
                   <td class="mono">{{ short(event.job_id) }}</td>
                   <td title="{{ event.user_agent }}">{{ compact_user_agent(event.user_agent) }}</td>
                 </tr>
               {% else %}
-                <tr><td colspan="7" class="muted">暂无数据。</td></tr>
+                <tr><td colspan="8" class="muted">暂无数据。</td></tr>
               {% endfor %}
             </tbody>
           </table>

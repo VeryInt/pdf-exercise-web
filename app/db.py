@@ -88,6 +88,23 @@ def init_db() -> None:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_visitor_events_created_at ON visitor_events(created_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_visitor_events_type_created_at ON visitor_events(event_type, created_at)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ip_geo_cache (
+                ip TEXT PRIMARY KEY,
+                asn TEXT NOT NULL DEFAULT '',
+                as_name TEXT NOT NULL DEFAULT '',
+                as_domain TEXT NOT NULL DEFAULT '',
+                country_code TEXT NOT NULL DEFAULT '',
+                country TEXT NOT NULL DEFAULT '',
+                continent_code TEXT NOT NULL DEFAULT '',
+                continent TEXT NOT NULL DEFAULT '',
+                lookup_status TEXT NOT NULL DEFAULT 'ok',
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ip_geo_cache_updated_at ON ip_geo_cache(updated_at)")
 
 
 def create_job(
@@ -167,6 +184,48 @@ def hourly_job_count_for_ip(client_ip: str) -> int:
             (client_ip, cutoff),
         ).fetchone()
     return int(row["count"])
+
+
+def get_ip_geo(ip: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM ip_geo_cache WHERE ip = ?", (ip,)).fetchone()
+    return dict(row) if row else None
+
+
+def upsert_ip_geo(ip: str, data: dict[str, Any], *, lookup_status: str = "ok") -> dict[str, Any]:
+    record = {
+        "ip": ip,
+        "asn": str(data.get("asn") or ""),
+        "as_name": str(data.get("as_name") or ""),
+        "as_domain": str(data.get("as_domain") or ""),
+        "country_code": str(data.get("country_code") or ""),
+        "country": str(data.get("country") or ""),
+        "continent_code": str(data.get("continent_code") or ""),
+        "continent": str(data.get("continent") or ""),
+        "lookup_status": lookup_status,
+        "updated_at": utc_now(),
+    }
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO ip_geo_cache (
+                ip, asn, as_name, as_domain, country_code, country,
+                continent_code, continent, lookup_status, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ip) DO UPDATE SET
+                asn = excluded.asn,
+                as_name = excluded.as_name,
+                as_domain = excluded.as_domain,
+                country_code = excluded.country_code,
+                country = excluded.country,
+                continent_code = excluded.continent_code,
+                continent = excluded.continent,
+                lookup_status = excluded.lookup_status,
+                updated_at = excluded.updated_at
+            """,
+            tuple(record.values()),
+        )
+    return record
 
 
 def queue_position(job_id: str) -> int | None:
@@ -325,9 +384,22 @@ def recent_visitor_events(*, limit: int = 100) -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT event_type, client_ip, client_id, method, path, user_agent, referer, job_id, created_at
+            SELECT
+                visitor_events.event_type,
+                visitor_events.client_ip,
+                visitor_events.client_id,
+                visitor_events.method,
+                visitor_events.path,
+                visitor_events.user_agent,
+                visitor_events.referer,
+                visitor_events.job_id,
+                visitor_events.created_at,
+                COALESCE(ip_geo_cache.country, '') AS country,
+                COALESCE(ip_geo_cache.country_code, '') AS country_code,
+                COALESCE(ip_geo_cache.as_name, '') AS as_name
             FROM visitor_events
-            ORDER BY created_at DESC, id DESC
+            LEFT JOIN ip_geo_cache ON ip_geo_cache.ip = visitor_events.client_ip
+            ORDER BY visitor_events.created_at DESC, visitor_events.id DESC
             LIMIT ?
             """,
             (limit,),
@@ -340,15 +412,19 @@ def visitor_ip_rank(*, since: str, limit: int = 20) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT
-                client_ip,
+                visitor_events.client_ip,
                 COUNT(*) AS total_events,
                 SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views,
                 SUM(CASE WHEN event_type = 'job_created' THEN 1 ELSE 0 END) AS job_created,
                 COUNT(DISTINCT NULLIF(client_id, '')) AS unique_clients,
-                MAX(created_at) AS last_seen
+                MAX(visitor_events.created_at) AS last_seen,
+                COALESCE(ip_geo_cache.country, '') AS country,
+                COALESCE(ip_geo_cache.country_code, '') AS country_code,
+                COALESCE(ip_geo_cache.as_name, '') AS as_name
             FROM visitor_events
-            WHERE created_at >= ? AND client_ip != ''
-            GROUP BY client_ip
+            LEFT JOIN ip_geo_cache ON ip_geo_cache.ip = visitor_events.client_ip
+            WHERE visitor_events.created_at >= ? AND visitor_events.client_ip != ''
+            GROUP BY visitor_events.client_ip
             ORDER BY total_events DESC, last_seen DESC
             LIMIT ?
             """,

@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     worker_poll_seconds: int = 3
     visitor_stats_token: str = ""
     visitor_event_retention_days: int = 90
+    ipinfo_token: str = ""
+    ipinfo_cache_days: int = 30
+    shared_access_token: str = ""
+    shared_ai_provider: str = "openai"
+    shared_ai_base_url: str = ""
+    shared_ai_api_key: str = ""
+    shared_ai_model: str = "gpt-5.5"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

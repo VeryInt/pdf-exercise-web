@@ -20,6 +20,8 @@
 - 使用 SQLite 记录任务状态，上传文件和生成结果存放在本地 `data/`。
 - 单 worker 顺序处理任务，适合 1GB 小主机。
 - MVP 限制：单文件 10MB、全局 queued/running 最多 2 个、同 IP 同时最多 1 个任务、同 IP 每小时最多 5 个任务。
+- 可使用 IPInfo Lite 在首页和隐藏统计页显示访问者国家与网络组织，查询结果缓存到 SQLite。
+- 可配置共享授权链接，让受邀用户无需自备 API Key；共享用户免除每小时 5 次限制，但仍受并发限制。
 - 服务端任务超过 24 小时会被清理，包括上传文件、任务目录、产物文件和 SQLite 任务记录。
 - 浏览器 LocalStorage 可保存最近 job_id 和用户自己的 AI 配置。
 - 可选隐藏统计页记录 `page_view`、`job_created`、`artifact_download` 三类事件，方便站长了解访问和使用情况。
@@ -40,6 +42,8 @@
 最近任务列表保存在用户自己的浏览器 LocalStorage 中，只保存任务引用和展示用元数据。服务端 24 小时清理不会主动删除用户浏览器里的 LocalStorage；如果任务已过期，用户再次查看时会得到任务不存在或文件已清理的提示。
 
 隐藏统计页只记录 IP、匿名浏览器 `client_id`、User-Agent、路径和任务 ID 引用，不记录 API Key、Base URL、上传文件内容、PDF 内容或答案内容。真实 `VISITOR_STATS_TOKEN` 必须只放在部署环境的 `.env`，不要提交到 Git。
+
+IPInfo token、共享访问 token 和共享 AI 配置也只能保存在部署环境的 `.env`。共享 AI Key 不会发送到浏览器，也不会写入 SQLite 或任务目录。
 
 ## 本地运行
 
@@ -111,6 +115,45 @@ https://your-domain.example/internal/visitors?token=change-me
 ```
 
 这个入口不会出现在首页导航或页脚中。未设置 token、缺少 token 或 token 错误时都会返回 `404`，避免公开暴露统计页面。访问日志默认保留 90 天，并由清理脚本随过期任务一起清理。
+
+## IP 来源信息
+
+在 `.env` 中配置 IPInfo Lite：
+
+```bash
+IPINFO_TOKEN=your-ipinfo-token
+IPINFO_CACHE_DAYS=30
+```
+
+首页只展示访问者国家和 AS Name，不公开展示完整 IP；隐藏统计页会在 IP 旁显示国家和网络组织。IPInfo 查询失败不会阻断页面或任务提交。
+
+## 共享免 Key 入口
+
+在 `.env` 中配置：
+
+```bash
+SHARED_ACCESS_TOKEN=generate-a-long-random-token
+SHARED_AI_PROVIDER=openai
+SHARED_AI_BASE_URL=https://your-provider.example/v1
+SHARED_AI_API_KEY=your-private-api-key
+SHARED_AI_MODEL=gpt-5.5
+```
+
+授权链接使用 URL Fragment，避免访问 token 进入 Web 服务器访问日志：
+
+```text
+https://your-domain.example/#token=generate-a-long-random-token
+```
+
+浏览器会把 token 临时保存在 SessionStorage 并立即从地址栏移除。普通用户仍受同 IP 每小时 5 次限制；共享授权用户免除小时次数限制，但同 IP 同时 1 个任务、全站最多 2 个任务的限制保持不变。
+
+如果要在页脚上方展示飞书二维码，将图片放到：
+
+```text
+static/feishu-qr.png
+```
+
+图片不存在时交流二维码区域不会渲染，也不会显示破图。
 
 ## 远程部署脚本
 
