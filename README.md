@@ -116,6 +116,8 @@ https://your-domain.example/internal/visitors?token=change-me
 
 这个入口不会出现在首页导航或页脚中。未设置 token、缺少 token 或 token 错误时都会返回 `404`，避免公开暴露统计页面。访问日志默认保留 90 天，并由清理脚本随过期任务一起清理。
 
+统计页会自动读取访问者浏览器时区，并按该时区计算“今日”、近 7 天日期和展示事件时间。
+
 ## IP 来源信息
 
 在 `.env` 中配置 IPInfo Lite：

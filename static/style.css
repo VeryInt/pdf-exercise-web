@@ -66,7 +66,8 @@
   height: 160px;
   object-fit: contain;
   background: #fff;
-  border: 1px solid var(--line);
+  border: 0;
+  border-radius: 4px;
 }
 
 .stats-subline {

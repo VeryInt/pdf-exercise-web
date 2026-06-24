@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -310,6 +311,22 @@ def utc_cutoff(days: int = 0, hours: int = 0) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days, hours=hours)).isoformat()
 
 
+def valid_timezone_name(value: str) -> str:
+    candidate = value.strip() or "UTC"
+    try:
+        ZoneInfo(candidate)
+    except ZoneInfoNotFoundError:
+        return "UTC"
+    return candidate
+
+
+def local_day_start_utc(timezone_name: str) -> str:
+    local_timezone = ZoneInfo(timezone_name)
+    local_now = datetime.now(timezone.utc).astimezone(local_timezone)
+    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return local_midnight.astimezone(timezone.utc).isoformat()
+
+
 def short(value: str, length: int = 8) -> str:
     return value[:length] if value else ""
 
@@ -321,12 +338,18 @@ def compact_user_agent(value: str) -> str:
 
 
 @app.get("/internal/visitors", response_class=HTMLResponse, include_in_schema=False)
-def visitor_stats_page(request: Request, token: str = Query(default="")):
+def visitor_stats_page(
+    request: Request,
+    token: str = Query(default=""),
+    timezone_name: str = Query(default="UTC", alias="timezone"),
+):
     require_stats_token(token)
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    timezone_name = valid_timezone_name(timezone_name)
+    today = local_day_start_utc(timezone_name)
+    seven_days_ago = utc_cutoff(days=7)
     recent_events = recent_visitor_events(limit=100)
     ip_rank_24h = visitor_ip_rank(since=utc_cutoff(hours=24), limit=20)
-    ip_rank_7d = visitor_ip_rank(since=utc_cutoff(days=7), limit=20)
+    ip_rank_7d = visitor_ip_rank(since=seven_days_ago, limit=20)
     lookup_ip_geos(
         [row.get("client_ip", "") for row in recent_events + ip_rank_24h + ip_rank_7d if row.get("client_ip")]
     )
@@ -334,12 +357,13 @@ def visitor_stats_page(request: Request, token: str = Query(default="")):
         "request": request,
         "today": visitor_summary(since=today),
         "last_24h": visitor_summary(since=utc_cutoff(hours=24)),
-        "last_7d": visitor_summary(since=utc_cutoff(days=7)),
-        "daily": visitor_daily_counts(since=utc_cutoff(days=7)),
+        "last_7d": visitor_summary(since=seven_days_ago),
+        "daily": visitor_daily_counts(since=seven_days_ago, timezone_name=timezone_name),
         "recent_events": recent_visitor_events(limit=100),
         "ip_rank_24h": visitor_ip_rank(since=utc_cutoff(hours=24), limit=20),
         "ip_rank_7d": visitor_ip_rank(since=utc_cutoff(days=7), limit=20),
         "short": short,
         "compact_user_agent": compact_user_agent,
+        "timezone_name": timezone_name,
     }
     return templates.TemplateResponse("visitor_stats.html", context)

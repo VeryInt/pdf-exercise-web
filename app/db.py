@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
+from zoneinfo import ZoneInfo
 
 from app.config import settings
 
@@ -361,23 +362,37 @@ def visitor_summary(*, since: str) -> dict[str, int]:
     return {key: int(row[key] or 0) for key in row.keys()}
 
 
-def visitor_daily_counts(*, since: str) -> list[dict[str, Any]]:
+def visitor_daily_counts(*, since: str, timezone_name: str = "UTC") -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT
-                substr(created_at, 1, 10) AS day,
-                SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views,
-                SUM(CASE WHEN event_type = 'job_created' THEN 1 ELSE 0 END) AS job_created,
-                COUNT(DISTINCT NULLIF(client_ip, '')) AS unique_ips
+            SELECT created_at, event_type, client_ip
             FROM visitor_events
             WHERE created_at >= ?
-            GROUP BY substr(created_at, 1, 10)
-            ORDER BY day
             """,
             (since,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    target_timezone = ZoneInfo(timezone_name)
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        local_day = datetime.fromisoformat(row["created_at"]).astimezone(target_timezone).date().isoformat()
+        bucket = grouped.setdefault(
+            local_day,
+            {"day": local_day, "page_views": 0, "job_created": 0, "unique_ips": set()},
+        )
+        if row["event_type"] == "page_view":
+            bucket["page_views"] += 1
+        elif row["event_type"] == "job_created":
+            bucket["job_created"] += 1
+        if row["client_ip"]:
+            bucket["unique_ips"].add(row["client_ip"])
+    return [
+        {
+            **bucket,
+            "unique_ips": len(bucket["unique_ips"]),
+        }
+        for _, bucket in sorted(grouped.items())
+    ]
 
 
 def recent_visitor_events(*, limit: int = 100) -> list[dict[str, Any]]:
