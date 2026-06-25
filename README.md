@@ -22,6 +22,7 @@
 - MVP 限制：单文件 10MB、全局 queued/running 最多 2 个、同 IP 同时最多 1 个任务、同 IP 每小时最多 5 个任务。
 - 可使用 IPInfo Lite 在首页和隐藏统计页显示访问者国家与网络组织，查询结果缓存到 SQLite。
 - 可配置共享授权链接，让受邀用户无需自备 API Key；共享用户免除每小时 5 次限制，但仍受并发限制。
+- 可在隐藏控制页为固定 IP 创建有限次数或无限次数的试用 token；额度使用 SQLite 事务预约，并仅在 PDF 成功后扣减。
 - 服务端任务超过 24 小时会被清理，包括上传文件、任务目录、产物文件和 SQLite 任务记录。
 - 浏览器 LocalStorage 可保存最近 job_id 和用户自己的 AI 配置。
 - 可选隐藏统计页记录 `page_view`、`job_created`、`artifact_download` 三类事件，方便站长了解访问和使用情况。
@@ -148,6 +149,38 @@ https://your-domain.example/#token=generate-a-long-random-token
 ```
 
 浏览器会把 token 临时保存在 SessionStorage 并立即从地址栏移除。普通用户仍受同 IP 每小时 5 次限制；共享授权用户免除小时次数限制，但同 IP 同时 1 个任务、全站最多 2 个任务的限制保持不变。
+
+## SQLite 试用 Token
+
+在 `.env` 中设置：
+
+```bash
+TOKEN_ADMIN_TOKEN=generate-an-independent-admin-token
+TRIAL_RESERVATION_TIMEOUT_HOURS=2
+TRIAL_TOKEN_DEFAULT_DAYS=7
+```
+
+隐藏管理页：
+
+```text
+https://your-domain.example/internal/trial-tokens#token=generate-an-independent-admin-token
+```
+
+管理 token 只保存在当前标签页的 SessionStorage，并会立即从地址栏移除。控制页支持：
+
+- 从近期访问者选择 IP 或手动输入 IPv4/IPv6。
+- 创建有限次数或无限次数的 token。
+- 默认 7 天过期，也可设置永不过期。
+- 查看已用、预约、最大和剩余次数。
+- 查看最近任务并撤销 token。
+
+试用 token 链接仍使用：
+
+```text
+https://your-domain.example/#token=trial_xxx
+```
+
+SQLite 只保存 token 的 SHA-256，不保存可还原的明文。任务提交时会先原子预约额度；PDF 成功生成后才增加已用次数，失败任务会释放预约。普通用户仍受每小时 5 次限制，试用 token 免小时限制但仍受同 IP 和全站并发限制。
 
 如果要在页脚上方展示飞书二维码，将图片放到：
 

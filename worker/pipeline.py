@@ -11,6 +11,7 @@ from PIL import Image, ImageEnhance, ImageOps
 
 from app.config import settings
 from app.db import update_job
+from app.trial_tokens import finalize_trial_reservation, release_trial_reservation
 from worker.ai import transcribe_worksheet
 from worker.render import generate_outputs
 
@@ -193,6 +194,9 @@ def process_job(job: dict[str, Any]) -> None:
         for warning in warnings:
             update_job(job_id, event=warning, level="warn")
 
+        if job.get("access_mode") == "trial":
+            if not finalize_trial_reservation(job_id):
+                raise RuntimeError("试用额度结算失败。")
         update_job(
             job_id,
             status="completed",
@@ -202,4 +206,6 @@ def process_job(job: dict[str, Any]) -> None:
         )
     except Exception as exc:
         (work_dir / "secrets.json").unlink(missing_ok=True)
+        if job.get("access_mode") == "trial":
+            release_trial_reservation(job_id)
         update_job(job_id, status="failed", progress=100, error=str(exc), event=f"任务失败：{exc}", level="error")

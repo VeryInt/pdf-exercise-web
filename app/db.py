@@ -46,6 +46,8 @@ def init_db() -> None:
                 original_filename TEXT NOT NULL,
                 client_id TEXT NOT NULL DEFAULT '',
                 client_ip TEXT NOT NULL DEFAULT '',
+                access_mode TEXT NOT NULL DEFAULT 'user_key',
+                trial_token_id TEXT NOT NULL DEFAULT '',
                 upload_path TEXT NOT NULL,
                 work_dir TEXT NOT NULL,
                 artifacts_json TEXT NOT NULL DEFAULT '{}',
@@ -60,6 +62,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE jobs ADD COLUMN client_id TEXT NOT NULL DEFAULT ''")
         if "client_ip" not in columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN client_ip TEXT NOT NULL DEFAULT ''")
+        if "access_mode" not in columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'user_key'")
+        if "trial_token_id" not in columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN trial_token_id TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS job_events (
@@ -106,6 +112,40 @@ def init_db() -> None:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ip_geo_cache_updated_at ON ip_geo_cache(updated_at)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trial_tokens (
+                id TEXT PRIMARY KEY,
+                token_hash TEXT NOT NULL UNIQUE,
+                token_prefix TEXT NOT NULL,
+                bound_ip TEXT NOT NULL,
+                max_uses INTEGER,
+                used_count INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                expires_at TEXT
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_trial_tokens_bound_ip ON trial_tokens(bound_ip)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_trial_tokens_status ON trial_tokens(status)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trial_reservations (
+                job_id TEXT PRIMARY KEY,
+                token_id TEXT NOT NULL,
+                client_ip TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'reserved',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trial_reservations_token_status "
+            "ON trial_reservations(token_id, status)"
+        )
 
 
 def create_job(
@@ -116,6 +156,8 @@ def create_job(
     original_filename: str,
     client_id: str,
     client_ip: str,
+    access_mode: str,
+    trial_token_id: str,
     upload_path: Path,
     work_dir: Path,
 ) -> None:
@@ -125,8 +167,9 @@ def create_job(
             """
             INSERT INTO jobs (
                 id, status, progress, subject, diagram_strategy, original_filename,
-                client_id, client_ip, upload_path, work_dir, created_at, updated_at
-            ) VALUES (?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                client_id, client_ip, access_mode, trial_token_id,
+                upload_path, work_dir, created_at, updated_at
+            ) VALUES (?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job_id,
@@ -135,6 +178,8 @@ def create_job(
                 original_filename,
                 client_id,
                 client_ip,
+                access_mode,
+                trial_token_id,
                 str(upload_path),
                 str(work_dir),
                 now,

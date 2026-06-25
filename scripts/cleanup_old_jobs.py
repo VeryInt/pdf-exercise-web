@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.db import connect, delete_visitor_events_before, init_db
+from app.trial_tokens import release_stale_trial_reservations
 
 
 def main() -> None:
@@ -25,7 +26,11 @@ def main() -> None:
 
     visitor_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.visitor_event_retention_days)
     deleted_events = delete_visitor_events_before(visitor_cutoff.isoformat())
-    print(f"Cleaned {len(rows)} expired jobs and {deleted_events} visitor events.")
+    released_reservations = release_stale_trial_reservations()
+    print(
+        f"Cleaned {len(rows)} expired jobs, {deleted_events} visitor events, "
+        f"and released {released_reservations} stale trial reservations."
+    )
 
 
 if __name__ == "__main__":

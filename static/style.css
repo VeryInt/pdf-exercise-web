@@ -29,6 +29,11 @@
   color: var(--muted);
 }
 
+.shared-access-banner .text-link {
+  margin-top: 0.65rem;
+  font-size: 12px;
+}
+
 .community-section {
   padding: 2.5rem 0;
   border-top: 1px solid var(--line);
@@ -65,7 +70,7 @@
   width: 160px;
   height: 160px;
   object-fit: contain;
-  background: #fff;
+  background: transparent;
   border: 0;
   border-radius: 4px;
 }
@@ -1192,6 +1197,58 @@ h3 {
   text-transform: uppercase;
 }
 
+.token-admin-page {
+  padding: 3rem 0 4rem;
+}
+
+.token-admin-message {
+  padding: 1.5rem;
+}
+
+.token-admin-message h2,
+.token-admin-message p {
+  margin: 0;
+}
+
+.token-admin-message p {
+  margin-top: 0.5rem;
+  color: var(--muted);
+}
+
+.token-admin-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 2.5rem;
+  padding: 1.5rem;
+}
+
+.token-admin-form .token-note {
+  grid-column: 1 / -1;
+}
+
+.token-admin-form .btn {
+  justify-self: start;
+}
+
+.token-checkbox {
+  margin-top: 0;
+}
+
+.token-created {
+  padding-bottom: 1.5rem;
+}
+
+.token-created > p,
+.token-created > .field,
+.token-created > .btn {
+  margin-left: 1.5rem;
+  margin-right: 1.5rem;
+}
+
+.token-created > p {
+  color: var(--warn);
+}
+
 @media (max-width: 980px) {
   .nav-links {
     display: none;
@@ -1234,6 +1291,7 @@ h3 {
   }
 
   .field-grid,
+  .token-admin-form,
   .strategy-grid,
   .privacy-cards,
   .stats-grid {

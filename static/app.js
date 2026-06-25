@@ -14,6 +14,7 @@ const testConnection = document.querySelector("#test-connection");
 const submitButton = document.querySelector("#submit-button");
 const recentBox = document.querySelector("#recent-jobs");
 const clearRecent = document.querySelector("#clear-recent");
+const clearServiceToken = document.querySelector("#clear-service-token");
 
 const configFields = ["provider", "base_url", "model", "api_key"];
 const configKey = "pdfExerciseMakerConfig";
@@ -65,15 +66,31 @@ function headers() {
   return result;
 }
 
-function setSharedAccessState(enabled) {
+function setSharedAccessState(status) {
   const banner = document.querySelector("#shared-access-banner");
+  const enabled = Boolean(status.shared_access_authorized);
+  const invalid = status.access_mode === "invalid";
   banner.hidden = !enabled;
+  if (invalid) banner.hidden = false;
+  document.querySelector("#shared-access-dot").className = invalid ? "dot" : "dot ok";
+  document.querySelector("#shared-access-title").textContent = invalid
+    ? "试用授权无效"
+    : status.access_mode === "trial"
+      ? "试用 AI 配置已启用"
+      : "共享 AI 配置已启用";
+  document.querySelector("#shared-access-detail").textContent = invalid
+    ? "请检查链接或联系管理员。清除授权后可以改用自己的 API Key。"
+    : status.access_mode === "trial"
+      ? status.trial_remaining === null
+        ? "试用授权不限次数，本次会话无需填写 API Key。"
+        : `试用授权剩余 ${status.trial_remaining} 次，本次会话无需填写 API Key。`
+      : "本次会话将使用站点提供的模型配置，无需填写 API Key。";
   for (const name of ["provider", "base_url", "model", "api_key"]) {
     const field = document.querySelector(`[name="${name}"]`);
-    if (field) field.disabled = enabled;
+    if (field) field.disabled = enabled || invalid;
   }
-  apiKeyInput.required = !enabled;
-  saveConfig.closest(".save-config").hidden = enabled;
+  apiKeyInput.required = !enabled && !invalid;
+  saveConfig.closest(".save-config").hidden = enabled || invalid;
 }
 
 function readJsonStorage(key, fallback) {
@@ -444,15 +461,19 @@ async function refreshSystemStatus() {
     if (!response.ok) return;
     const status = await response.json();
     document.querySelector("#active-jobs").textContent = `${status.active_jobs}/${status.max_active_jobs}`;
-    document.querySelector("#ip-quota").textContent = status.hourly_limit_exempt
-      ? "共享授权 · 不限小时次数"
+    document.querySelector("#ip-quota").textContent = status.access_mode === "trial"
+      ? status.trial_remaining === null
+        ? "试用授权 · 不限次数"
+        : `试用授权 · 剩余 ${status.trial_remaining} 次`
+      : status.hourly_limit_exempt
+        ? "共享授权 · 不限小时次数"
       : `${status.hourly_jobs_for_ip} / ${status.max_jobs_per_ip_per_hour}`;
     document.querySelector("#max-upload").textContent = String(status.max_upload_mb);
     document.querySelector("#queue-limit").textContent = String(status.max_active_jobs);
     document.querySelector("#ip-active-limit").textContent = String(status.max_active_jobs_per_ip);
     const location = [status.visitor_country, status.visitor_as_name].filter(Boolean).join(" · ");
     document.querySelector("#visitor-location").textContent = `访问来源：${location || "未知"}`;
-    setSharedAccessState(Boolean(status.shared_access_authorized));
+    setSharedAccessState(status);
   } catch {}
 }
 
@@ -513,6 +534,11 @@ clearRecent.addEventListener("click", () => {
   localStorage.removeItem(recentJobsKey);
   renderRecentJobs();
   updateSessionStats();
+});
+
+clearServiceToken.addEventListener("click", () => {
+  sessionStorage.removeItem(serviceTokenKey);
+  window.location.reload();
 });
 
 form.addEventListener("submit", async (event) => {

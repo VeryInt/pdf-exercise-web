@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     shared_ai_base_url: str = ""
     shared_ai_api_key: str = ""
     shared_ai_model: str = "gpt-5.5"
+    token_admin_token: str = ""
+    trial_reservation_timeout_hours: int = 2
+    trial_token_default_days: int = 7
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

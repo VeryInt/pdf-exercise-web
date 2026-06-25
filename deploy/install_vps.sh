@@ -45,6 +45,8 @@ updates = {
     "MAX_ACTIVE_JOBS_PER_IP": "1",
     "MAX_JOBS_PER_IP_PER_HOUR": "5",
     "IPINFO_CACHE_DAYS": "30",
+    "TRIAL_RESERVATION_TIMEOUT_HOURS": "2",
+    "TRIAL_TOKEN_DEFAULT_DAYS": "7",
 }
 lines = text.splitlines()
 existing = {line.split("=", 1)[0] for line in lines if "=" in line and not line.startswith("#")}

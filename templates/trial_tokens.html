@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trial Tokens - PDF Exercise Maker</title>
+    <link rel="stylesheet" href="/static/style.css?v=20260626-1" />
+  </head>
+  <body>
+    <main class="shell token-admin-page" data-default-days="{{ default_days }}">
+      <header class="stats-hero">
+        <span class="chip mono">Internal - Trial Tokens</span>
+        <h1>试用 Token</h1>
+        <p>为固定 IP 创建有限或无限试用额度。明文 token 只会在创建时显示一次。</p>
+      </header>
+
+      <section id="admin-auth-error" class="stats-section token-admin-message" hidden>
+        <h2>页面不存在</h2>
+        <p>管理凭据缺失或无效。</p>
+      </section>
+
+      <div id="admin-content" hidden>
+        <section class="stats-section token-create-section">
+          <div class="panel-heading">
+            <div><span class="section-index">§ 01</span><h2>创建试用授权</h2></div>
+          </div>
+          <form id="trial-token-form" class="token-admin-form">
+            <label class="field">
+              <span>近期访问 IP</span>
+              <select id="recent-ip" class="select">
+                <option value="">请选择或手动输入</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>绑定 IP</span>
+              <input id="bound-ip" class="input mono" type="text" required placeholder="IPv4 或 IPv6" />
+            </label>
+            <label class="field">
+              <span>额度类型</span>
+              <select id="usage-mode" class="select">
+                <option value="limited">有限次数</option>
+                <option value="unlimited">无限次数</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>使用次数</span>
+              <input id="max-uses" class="input mono" type="number" min="1" value="1" required />
+            </label>
+            <label class="field">
+              <span>过期时间</span>
+              <input id="expires-at" class="input mono" type="datetime-local" required />
+            </label>
+            <label class="save-config token-checkbox">
+              <input id="never-expires" type="checkbox" />
+              <span><strong>永不过期</strong><small>仍可随时手动撤销。</small></span>
+            </label>
+            <label class="field token-note">
+              <span>备注</span>
+              <input id="token-note" class="input" maxlength="300" placeholder="例如：张老师试用" />
+            </label>
+            <button class="btn large" type="submit">生成 Token</button>
+          </form>
+        </section>
+
+        <section id="created-token" class="stats-section token-created" hidden>
+          <div class="panel-heading"><div><span class="section-index">§ 02</span><h2>创建成功</h2></div></div>
+          <p>请立即保存，刷新后无法再次查看明文 token。</p>
+          <label class="field"><span>Token</span><input id="created-token-value" class="input mono" readonly /></label>
+          <label class="field"><span>试用链接</span><input id="created-token-url" class="input mono" readonly /></label>
+          <button id="copy-created-url" class="btn" type="button">复制试用链接</button>
+        </section>
+
+        <section class="stats-section">
+          <div class="panel-heading">
+            <div><span class="section-index">§ 03</span><h2>现有授权</h2></div>
+            <button id="refresh-tokens" class="text-link" type="button">刷新</button>
+          </div>
+          <div id="trial-token-list" class="stats-table-wrap"></div>
+        </section>
+      </div>
+    </main>
+    <script src="/static/trial-tokens.js?v=20260626-2"></script>
+  </body>
+</html>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PDF Exercise Maker - 试卷整理生成器</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230e1014'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia,serif' font-size='36' font-style='italic' fill='%23f6f4ee'%3EP%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/static/style.css?v=20260624-2" />
+    <link rel="stylesheet" href="/static/style.css?v=20260626-1" />
   </head>
   <body>
     <header class="topbar">
@@ -166,8 +166,9 @@
           </div>
 
           <div id="shared-access-banner" class="shared-access-banner" hidden>
-            <span><span class="dot ok"></span><strong>共享 AI 配置已启用</strong></span>
-            <small>本次会话将使用站点提供的模型配置，无需填写 API Key。</small>
+            <span><span id="shared-access-dot" class="dot ok"></span><strong id="shared-access-title">共享 AI 配置已启用</strong></span>
+            <small id="shared-access-detail">本次会话将使用站点提供的模型配置，无需填写 API Key。</small>
+            <button id="clear-service-token" class="text-link" type="button">清除授权</button>
           </div>
 
           <div class="field-grid">
@@ -313,8 +314,8 @@
             <p>关于试卷识别、图形还原和部署使用，欢迎通过飞书交流。</p>
           </div>
           <a class="community-qr-link" href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=9d5kc03c-0abc-4bed-ad25-bf54e26fcff2" target="_blank" rel="noreferrer">
-            <img src="/static/feishu-qr.png" alt="飞书联系二维码" width="160" height="160" />
-            <span>扫码添加飞书，一起交流</span>
+            <img src="/static/feishu-qr.png?t=1" alt="飞书联系二维码" width="160" height="160" />
+            <span>扫码添加飞书</span>
           </a>
         </div>
       </section>
@@ -337,6 +338,6 @@
       </div>
     </footer>
 
-    <script src="/static/app.js?v=20260624-1"></script>
+    <script src="/static/app.js?v=20260626-1"></script>
   </body>
 </html>
