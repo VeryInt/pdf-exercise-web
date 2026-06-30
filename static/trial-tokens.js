@@ -14,6 +14,7 @@ const recentIp = document.querySelector("#recent-ip");
 const boundIp = document.querySelector("#bound-ip");
 const usageMode = document.querySelector("#usage-mode");
 const maxUses = document.querySelector("#max-uses");
+const tokenCount = document.querySelector("#token-count");
 const expiresAt = document.querySelector("#expires-at");
 const neverExpires = document.querySelector("#never-expires");
 const createdPanel = document.querySelector("#created-token");
@@ -47,10 +48,14 @@ function renderTokens(tokens) {
   const rows = tokens.map((token) => {
     const max = token.max_uses === null ? "无限" : token.max_uses;
     const remaining = token.remaining === null ? "无限" : token.remaining;
+    const boundLabel = token.bound_ip || "首次访问自动绑定";
+    const geoLine = token.bound_ip
+      ? `${escapeHtml(token.country || "未知")} · ${escapeHtml(token.as_name || "未知网络")}`
+      : "等待首次访问";
     return `
       <tr>
         <td class="mono">${escapeHtml(token.token_prefix)}…</td>
-        <td><b>${escapeHtml(token.bound_ip)}</b><small class="stats-subline">${escapeHtml(token.country || "未知")} · ${escapeHtml(token.as_name || "未知网络")}</small></td>
+        <td><b>${escapeHtml(boundLabel)}</b><small class="stats-subline">${geoLine}</small></td>
         <td>${token.used_count} / ${token.reserved_count} / ${max}</td>
         <td>${remaining}</td>
         <td>${escapeHtml(formatDate(token.expires_at))}</td>
@@ -113,6 +118,7 @@ form.addEventListener("submit", async (event) => {
     max_uses: usageMode.value === "unlimited" ? null : Number(maxUses.value),
     expires_at: neverExpires.checked ? null : new Date(expiresAt.value).toISOString(),
     note: document.querySelector("#token-note").value.trim(),
+    count: Number(tokenCount.value || 1),
   };
   const response = await fetch("/api/internal/trial-tokens", {
     method: "POST",
@@ -124,15 +130,18 @@ form.addEventListener("submit", async (event) => {
     alert(data.detail || "创建失败");
     return;
   }
+  const links = (data.tokens || [data]).map((item) => `${window.location.origin}/#token=${encodeURIComponent(item.token)}`);
   document.querySelector("#created-token-value").value = data.token;
-  document.querySelector("#created-token-url").value =
-    `${window.location.origin}/#token=${encodeURIComponent(data.token)}`;
+  document.querySelector("#created-token-url").value = links[0];
+  document.querySelector("#created-token-list").value = links.join("\n");
+  document.querySelector("#copy-created-url").textContent = links.length > 1 ? "复制全部试用链接" : "复制试用链接";
   createdPanel.hidden = false;
   await loadData();
 });
 
 document.querySelector("#copy-created-url").addEventListener("click", async () => {
-  await navigator.clipboard.writeText(document.querySelector("#created-token-url").value);
+  const allLinks = document.querySelector("#created-token-list").value.trim();
+  await navigator.clipboard.writeText(allLinks || document.querySelector("#created-token-url").value);
   document.querySelector("#copy-created-url").textContent = "已复制";
 });
 

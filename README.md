@@ -168,8 +168,8 @@ https://your-domain.example/internal/trial-tokens#token=generate-an-independent-
 
 管理 token 只保存在当前标签页的 SessionStorage，并会立即从地址栏移除。控制页支持：
 
-- 从近期访问者选择 IP 或手动输入 IPv4/IPv6。
-- 创建有限次数或无限次数的 token。
+- 从近期访问者选择 IP、手动输入 IPv4/IPv6，或留空创建“首次访问自动绑定 IP”的 token。
+- 创建有限次数或无限次数的 token，并支持一次批量生成最多 100 个。
 - 默认 7 天过期，也可设置永不过期。
 - 查看已用、预约、最大和剩余次数。
 - 查看最近任务并撤销 token。
@@ -180,7 +180,7 @@ https://your-domain.example/internal/trial-tokens#token=generate-an-independent-
 https://your-domain.example/#token=trial_xxx
 ```
 
-SQLite 只保存 token 的 SHA-256，不保存可还原的明文。任务提交时会先原子预约额度；PDF 成功生成后才增加已用次数，失败任务会释放预约。普通用户仍受每小时 5 次限制，试用 token 免小时限制但仍受同 IP 和全站并发限制。
+SQLite 只保存 token 的 SHA-256，不保存可还原的明文。未绑定 IP 的 token 会在首次带 token 访问状态接口时自动绑定当次访问 IP，之后只能由该 IP 使用。任务提交时会先原子预约额度；PDF 成功生成后才增加已用次数，失败任务会释放预约。普通用户仍受每小时 5 次限制，试用 token 免小时限制但仍受同 IP 和全站并发限制。
 
 如果要在页脚上方展示飞书二维码，将图片放到：
 

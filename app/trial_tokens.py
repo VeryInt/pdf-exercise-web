@@ -24,6 +24,11 @@ def normalize_ip(value: str) -> str:
     return str(ipaddress.ip_address(value.strip()))
 
 
+def normalize_optional_ip(value: str) -> str:
+    value = value.strip()
+    return normalize_ip(value) if value else ""
+
+
 def parse_datetime(value: str | None) -> str | None:
     if not value:
         return None
@@ -40,7 +45,7 @@ def create_trial_token(
     expires_at: str | None,
     note: str = "",
 ) -> dict[str, Any]:
-    bound_ip = normalize_ip(bound_ip)
+    bound_ip = normalize_optional_ip(bound_ip)
     if max_uses is not None and max_uses < 1:
         raise ValueError("有限次数必须大于等于 1。")
     expires_at = parse_datetime(expires_at)
@@ -85,6 +90,27 @@ def create_trial_token(
     }
 
 
+def create_trial_tokens(
+    *,
+    bound_ip: str,
+    max_uses: int | None,
+    expires_at: str | None,
+    note: str = "",
+    count: int = 1,
+) -> list[dict[str, Any]]:
+    if count < 1 or count > 100:
+        raise ValueError("批量生成数量必须在 1 到 100 之间。")
+    return [
+        create_trial_token(
+            bound_ip=bound_ip,
+            max_uses=max_uses,
+            expires_at=expires_at,
+            note=note,
+        )
+        for _ in range(count)
+    ]
+
+
 def _token_row(conn: sqlite3.Connection, raw_token: str) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM trial_tokens WHERE token_hash = ?",
@@ -93,11 +119,27 @@ def _token_row(conn: sqlite3.Connection, raw_token: str) -> sqlite3.Row | None:
 
 
 def _is_usable(row: sqlite3.Row, client_ip: str, reserved_count: int) -> bool:
-    if row["status"] != "active" or row["bound_ip"] != normalize_ip(client_ip):
+    if row["status"] != "active":
+        return False
+    bound_ip = row["bound_ip"] or ""
+    if bound_ip and bound_ip != normalize_ip(client_ip):
         return False
     if row["expires_at"] and datetime.fromisoformat(row["expires_at"]) <= datetime.now(timezone.utc):
         return False
     return row["max_uses"] is None or row["used_count"] + reserved_count < row["max_uses"]
+
+
+def _bind_if_needed(conn: sqlite3.Connection, row: sqlite3.Row, client_ip: str) -> sqlite3.Row:
+    if row["bound_ip"]:
+        return row
+    conn.execute(
+        "UPDATE trial_tokens SET bound_ip = ? WHERE id = ? AND bound_ip = ''",
+        (client_ip, row["id"]),
+    )
+    refreshed = conn.execute("SELECT * FROM trial_tokens WHERE id = ?", (row["id"],)).fetchone()
+    if not refreshed:
+        raise TrialTokenError("试用授权无效，请检查链接或联系管理员。")
+    return refreshed
 
 
 def inspect_trial_token(raw_token: str, client_ip: str) -> dict[str, Any] | None:
@@ -107,9 +149,14 @@ def inspect_trial_token(raw_token: str, client_ip: str) -> dict[str, Any] | None
         client_ip = normalize_ip(client_ip)
     except ValueError:
         return None
-    with connect() as conn:
+    ensure_dirs()
+    conn = sqlite3.connect(settings.database_path, timeout=10, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("BEGIN IMMEDIATE")
         row = _token_row(conn, raw_token)
         if not row:
+            conn.commit()
             return None
         reserved_count = int(
             conn.execute(
@@ -118,7 +165,10 @@ def inspect_trial_token(raw_token: str, client_ip: str) -> dict[str, Any] | None
             ).fetchone()["count"]
         )
         if not _is_usable(row, client_ip, reserved_count):
+            conn.commit()
             return None
+        row = _bind_if_needed(conn, row, client_ip)
+        conn.commit()
         remaining = None
         if row["max_uses"] is not None:
             remaining = max(0, row["max_uses"] - row["used_count"] - reserved_count)
@@ -130,7 +180,13 @@ def inspect_trial_token(raw_token: str, client_ip: str) -> dict[str, Any] | None
             "reserved_count": reserved_count,
             "remaining": remaining,
             "expires_at": row["expires_at"],
+            "bound_ip": row["bound_ip"],
         }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def reserve_trial_token(raw_token: str, client_ip: str, job_id: str) -> dict[str, Any]:
@@ -157,6 +213,7 @@ def reserve_trial_token(raw_token: str, client_ip: str, job_id: str) -> dict[str
         )
         if not _is_usable(row, client_ip, reserved_count):
             raise TrialTokenError("试用授权无效，请检查链接或联系管理员。")
+        row = _bind_if_needed(conn, row, client_ip)
         now = utc_now()
         conn.execute(
             """

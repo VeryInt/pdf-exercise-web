@@ -11,7 +11,7 @@
       <header class="stats-hero">
         <span class="chip mono">Internal - Trial Tokens</span>
         <h1>试用 Token</h1>
-        <p>为固定 IP 创建有限或无限试用额度。明文 token 只会在创建时显示一次。</p>
+        <p>为固定 IP 或未绑定 IP 创建有限/无限试用额度。未绑定 token 会在首次访问时自动绑定访问者 IP。</p>
       </header>
 
       <section id="admin-auth-error" class="stats-section token-admin-message" hidden>
@@ -33,7 +33,11 @@
             </label>
             <label class="field">
               <span>绑定 IP</span>
-              <input id="bound-ip" class="input mono" type="text" required placeholder="IPv4 或 IPv6" />
+              <input id="bound-ip" class="input mono" type="text" placeholder="留空则首次访问自动绑定" />
+            </label>
+            <label class="field">
+              <span>生成数量</span>
+              <input id="token-count" class="input mono" type="number" min="1" max="100" value="1" required />
             </label>
             <label class="field">
               <span>额度类型</span>
@@ -67,6 +71,7 @@
           <p>请立即保存，刷新后无法再次查看明文 token。</p>
           <label class="field"><span>Token</span><input id="created-token-value" class="input mono" readonly /></label>
           <label class="field"><span>试用链接</span><input id="created-token-url" class="input mono" readonly /></label>
+          <label class="field"><span>批量链接</span><textarea id="created-token-list" class="input mono" rows="5" readonly></textarea></label>
           <button id="copy-created-url" class="btn" type="button">复制试用链接</button>
         </section>
 
@@ -79,6 +84,6 @@
         </section>
       </div>
     </main>
-    <script src="/static/trial-tokens.js?v=20260626-2"></script>
+    <script src="/static/trial-tokens.js?v=20260630-1"></script>
   </body>
 </html>

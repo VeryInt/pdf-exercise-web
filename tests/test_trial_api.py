@@ -95,6 +95,45 @@ class TrialApiTests(unittest.TestCase):
         secrets = json.loads((Path(job["work_dir"]) / "secrets.json").read_text(encoding="utf-8"))
         self.assertEqual(secrets, {"shared_access": True})
 
+    def test_admin_api_can_batch_create_unbound_tokens(self) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        response = self.client.post(
+            "/api/internal/trial-tokens",
+            headers={"X-Token-Admin": "admin-test-token"},
+            json={
+                "bound_ip": "",
+                "max_uses": 1,
+                "expires_at": expires_at,
+                "note": "batch",
+                "count": 2,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        created = response.json()
+        self.assertEqual(created["count"], 2)
+        self.assertEqual(len(created["tokens"]), 2)
+        self.assertTrue(all(item["bound_ip"] == "" for item in created["tokens"]))
+
+        first = created["tokens"][0]["token"]
+        status = self.client.get(
+            "/api/status",
+            headers={
+                "CF-Connecting-IP": "203.0.113.40",
+                "X-Service-Token": first,
+            },
+        ).json()
+        self.assertTrue(status["shared_access_authorized"])
+        self.assertEqual(status["trial_remaining"], 1)
+
+        wrong_ip = self.client.get(
+            "/api/status",
+            headers={
+                "CF-Connecting-IP": "203.0.113.41",
+                "X-Service-Token": first,
+            },
+        ).json()
+        self.assertFalse(wrong_ip["shared_access_authorized"])
+
 
 if __name__ == "__main__":
     unittest.main()

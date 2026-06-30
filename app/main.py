@@ -36,7 +36,7 @@ from app.db import (
 from app.ipinfo import lookup_ip_geo, lookup_ip_geos
 from app.trial_tokens import (
     TrialTokenError,
-    create_trial_token,
+    create_trial_tokens,
     inspect_trial_token,
     list_trial_tokens,
     recent_trial_ips,
@@ -370,10 +370,11 @@ def require_token_admin(request: Request) -> None:
 
 
 class TrialTokenCreateRequest(BaseModel):
-    bound_ip: str
+    bound_ip: str = ""
     max_uses: int | None = Field(default=None, ge=1)
     expires_at: str | None = None
     note: str = Field(default="", max_length=300)
+    count: int = Field(default=1, ge=1, le=100)
 
 
 def utc_cutoff(days: int = 0, hours: int = 0) -> str:
@@ -460,16 +461,23 @@ def trial_token_admin_data(request: Request):
 def trial_token_admin_create(request: Request, payload: TrialTokenCreateRequest):
     require_token_admin(request)
     try:
-        created = create_trial_token(
+        created_items = create_trial_tokens(
             bound_ip=payload.bound_ip,
             max_uses=payload.max_uses,
             expires_at=payload.expires_at,
             note=payload.note,
+            count=payload.count,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    created["url"] = f"{settings.public_base_url.rstrip('/')}/#token={created['token']}"
-    return created
+    for item in created_items:
+        item["url"] = f"{settings.public_base_url.rstrip('/')}/#token={item['token']}"
+    first = created_items[0]
+    return {
+        **first,
+        "tokens": created_items,
+        "count": len(created_items),
+    }
 
 
 @app.post("/api/internal/trial-tokens/{token_id}/revoke", include_in_schema=False)
